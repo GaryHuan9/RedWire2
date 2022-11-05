@@ -1,4 +1,5 @@
-#include <SFML/Graphics.hpp>
+#include "main.hpp"
+#include "Vector2.hpp"
 
 int main()
 {
@@ -13,8 +14,6 @@ int main()
 		}
 
 		window.clear(sf::Color::Black);
-
-
 
 		window.display();
 	}

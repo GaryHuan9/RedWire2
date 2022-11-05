@@ -9,5 +9,13 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/RedWire2/bin)
 
 add_subdirectory(ext/SFML)
 
-add_executable(RedWire2 src/main.cpp)
-target_link_libraries(RedWire2 sfml-system sfml-window sfml-graphics)
+add_executable(RedWire2
+        src/main.cpp
+        src/Layer.cpp
+        )
+
+target_link_libraries(RedWire2
+        sfml-system
+        sfml-window
+        sfml-graphics
+        )
