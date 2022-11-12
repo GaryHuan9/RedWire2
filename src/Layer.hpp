@@ -9,7 +9,7 @@ namespace rw
 class Layer
 {
 public:
-	void draw(sf::RenderWindow& window, Float2 center, float scale);
+	void draw(sf::RenderWindow& window, Float2 center, float zoom);
 };
 
 } // rw2

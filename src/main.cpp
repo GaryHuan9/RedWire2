@@ -12,7 +12,7 @@ int main()
 
 	sf::Vector2i last_mouse_position = sf::Mouse::getPosition(window);
 	rw::Float2 center;
-	float scale = 4.0f;
+	float zoom = -0.7f;
 
 	while (window.isOpen())
 	{
@@ -35,7 +35,7 @@ int main()
 				}
 				case sf::Event::MouseWheelScrolled:
 				{
-					scale += event.mouseWheelScroll.delta / 16.0f;
+					zoom += event.mouseWheelScroll.delta / 32.0f;
 					break;
 				}
 				default: break;
@@ -44,12 +44,13 @@ int main()
 
 		sf::Vector2i position = sf::Mouse::getPosition(window);
 		sf::Vector2f delta(position - last_mouse_position);
-		if (sf::Mouse::isButtonPressed(sf::Mouse::Button::Left)) center -= rw::Float2(delta.x, delta.y) / std::exp(scale);
+		if (sf::Mouse::isButtonPressed(sf::Mouse::Button::Left)) center -= rw::Float2(delta.x, delta.y) / zoom;
 		last_mouse_position = position;
 
 		window.clear(sf::Color::Black);
 
-		layer.draw(window, center, std::exp(scale));
+//		layer.draw(window, center, zoom);
+		layer.draw(window, rw::Float2(), zoom);
 
 		window.display();
 	}
