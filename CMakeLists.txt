@@ -11,7 +11,7 @@ add_subdirectory(ext/SFML)
 
 add_executable(RedWire2
         src/main.cpp
-        src/Layer.cpp
+        src/LayerView.cpp
         )
 
 target_link_libraries(RedWire2
