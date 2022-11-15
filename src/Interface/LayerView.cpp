@@ -1,7 +1,13 @@
 #include "LayerView.hpp"
 
+#include <SFML/Window.hpp>
+#include <SFML/Graphics.hpp>
+
 namespace rw
 {
+
+LayerView::LayerView(float aspect_ratio, float zoom)
+	: aspect_ratio(aspect_ratio), zoom(zoom) { update_zoom(); }
 
 void LayerView::draw(sf::RenderWindow& window) const
 {

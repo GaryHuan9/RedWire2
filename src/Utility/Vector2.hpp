@@ -22,10 +22,6 @@ public:
 	T y;
 };
 
-typedef Vector2<float> Float2;
-typedef Vector2<int32_t> Int2;
-typedef Vector2<uint32_t> UInt2;
-
 template<class T>
 inline Vector2<T> operator+(Vector2<T> value) { return Vector2<T>(+value.x, +value.y); }
 

@@ -1,9 +1,14 @@
 #include "main.hpp"
 #include "Interface/LayerView.hpp"
 
+#include <SFML/System.hpp>
+#include <SFML/Window.hpp>
+#include <SFML/Graphics.hpp>
+
 int main()
 {
 	sf::RenderWindow window(sf::VideoMode{ 1920, 1080 }, "RedWire2");
+	window.setVerticalSyncEnabled(true);
 
 	rw::Float2 window_size(window.getSize());
 	rw::LayerView layer_view(window_size.x / window_size.y);

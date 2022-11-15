@@ -3,14 +3,19 @@
 #include "main.hpp"
 #include "Utility/Vector2.hpp"
 
+namespace sf
+{
+	class RenderWindow;
+	class Vertex;
+}
+
 namespace rw
 {
 
 class LayerView
 {
 public:
-	explicit LayerView(float aspect_ratio, float zoom = 1.7f)
-		: aspect_ratio(aspect_ratio), zoom(zoom) { update_zoom(); }
+	explicit LayerView(float aspect_ratio, float zoom = 1.7f);
 
 	void set_aspect_ratio(float value)
 	{
