@@ -1,18 +1,20 @@
 #include "main.hpp"
-#include "LayerView.hpp"
+#include "Interface/LayerView.hpp"
 
 int main()
 {
 	sf::RenderWindow window(sf::VideoMode{ 1920, 1080 }, "RedWire2");
 
-	rw::LayerView layer(static_cast<float>(window.getSize().x) / static_cast<float>(window.getSize().y));
+	rw::Float2 window_size(window.getSize());
+	rw::LayerView layer_view(window_size.x / window_size.y);
 
-	sf::Vector2i last_mouse_position = sf::Mouse::getPosition(window);
+	rw::Float2 last_mouse_percent = rw::Float2(sf::Mouse::getPosition(window)) / window_size;
 
 	while (window.isOpen())
 	{
+		rw::Float2 mouse_percent = rw::Float2(sf::Mouse::getPosition(window)) / window_size;
+
 		sf::Event event{};
-		rw::Float2 mouse_delta;
 
 		while (window.pollEvent(event))
 		{
@@ -23,34 +25,36 @@ int main()
 					window.close();
 					break;
 				}
-				case sf::Event::MouseMoved:
-				{
-					mouse_delta += rw::Float2(rw::Int2(event.mouseMove.x, event.mouseMove.y));
-					break;
-				}
 				case sf::Event::Resized:
 				{
 					sf::Vector2f size(sf::Vector2u(event.size.width, event.size.height));
 					window.setView(sf::View(size / 2.0f, size));
-					layer.set_aspect_ratio(size.x / size.y);
+					layer_view.set_aspect_ratio(size.x / size.y);
+					window_size = rw::Float2(size);
 
 					break;
 				}
 				case sf::Event::MouseWheelScrolled:
 				{
-					layer.change_zoom(event.mouseWheelScroll.delta / 32.0f);
+					layer_view.change_zoom(event.mouseWheelScroll.delta / 32.0f, mouse_percent);
 					break;
 				}
 				default: break;
 			}
 		}
 
-		if (sf::Mouse::isButtonPressed(sf::Mouse::Button::Left)) std::cout << mouse_delta << std::endl;
 
-		layer.draw(window);
+		if (sf::Mouse::isButtonPressed(sf::Mouse::Button::Left))
+		{
+			rw::Float2 point = layer_view.get_point(last_mouse_percent);
+			layer_view.set_point(mouse_percent, point);
+		}
+
+		layer_view.draw(window);
 
 		window.display();
 		window.clear(sf::Color::Black);
+		last_mouse_percent = mouse_percent;
 	}
 
 	return 0;

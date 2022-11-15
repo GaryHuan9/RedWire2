@@ -47,13 +47,10 @@ void LayerView::draw(sf::RenderWindow& window) const
 		}
 	};
 
-	int32_t smaller_gap = zoom_gap / ZoomIncrement;
-
-	if (smaller_gap > 0)
+	if (zoom_level >= 0)
 	{
-		float alpha = std::sqrt(zoom_percent);
-		drawer(smaller_gap, 1.0f - alpha);
-		drawer(zoom_gap, alpha);
+		drawer(zoom_gap * ZoomIncrement, zoom_percent);
+		drawer(zoom_gap, 1.0f - zoom_percent);
 	}
 	else drawer(zoom_gap, 1.0f);
 
@@ -62,12 +59,14 @@ void LayerView::draw(sf::RenderWindow& window) const
 
 void LayerView::update_zoom()
 {
+	float shifted_zoom = zoom - ZoomLevelShift;
+
 	zoom_gap = 1;
-	zoom_level = static_cast<int32_t>(std::floor(zoom));
+	zoom_level = static_cast<int32_t>(std::floor(shifted_zoom));
 	for (int32_t i = 0; i < zoom_level; ++i) zoom_gap *= ZoomIncrement;
 
 	zoom_scale = std::pow(static_cast<float>(ZoomIncrement), zoom);
-	zoom_percent = zoom - static_cast<float>(zoom_level);
+	zoom_percent = shifted_zoom - static_cast<float>(zoom_level);
 	extend = Float2(zoom_scale * aspect_ratio, zoom_scale);
 }
 

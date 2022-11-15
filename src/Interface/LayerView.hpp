@@ -1,7 +1,7 @@
 #pragma once
 
 #include "main.hpp"
-#include "Vector2.hpp"
+#include "Utility/Vector2.hpp"
 
 namespace rw
 {
@@ -12,12 +12,6 @@ public:
 	explicit LayerView(float aspect_ratio, float zoom = 1.7f)
 		: aspect_ratio(aspect_ratio), zoom(zoom) { update_zoom(); }
 
-	[[nodiscard]]
-	Float2 get_min() const { return center - extend; }
-
-	[[nodiscard]]
-	Float2 get_max() const { return center + extend; }
-
 	void set_aspect_ratio(float value)
 	{
 		if (value == aspect_ratio) return;
@@ -25,7 +19,24 @@ public:
 		update_zoom();
 	}
 
-	Float2 change_center(Float2 delta) { return center += delta; }
+	[[nodiscard]]
+	Float2 get_min() const { return center - extend; }
+
+	[[nodiscard]]
+	Float2 get_max() const { return center + extend; }
+
+	[[nodiscard]]
+	Float2 get_point(Float2 percent) const
+	{
+		percent = percent * 2.0f - Float2(1.0f);
+		return center + extend * percent;
+	}
+
+	void set_point(Float2 percent, Float2 point)
+	{
+		percent = percent * 2.0f - Float2(1.0f);
+		center = point - extend * percent;
+	}
 
 	float change_zoom(float delta)
 	{
@@ -35,6 +46,14 @@ public:
 		zoom = new_zoom;
 		update_zoom();
 		return zoom;
+	}
+
+	float change_zoom(float delta, Float2 percent)
+	{
+		Float2 point = get_point(percent);
+		float result = change_zoom(delta);
+		set_point(percent, point);
+		return result;
 	}
 
 	void draw(sf::RenderWindow& window) const;
@@ -55,7 +74,8 @@ private:
 	mutable std::vector<sf::Vertex> vertices;
 
 	static constexpr int32_t ZoomIncrement = 8;
-	static constexpr float GridLineAlpha = 50.0f;
+	static constexpr float ZoomLevelShift = 0.7f;
+	static constexpr float GridLineAlpha = 45.0f;
 };
 
 } // rw2

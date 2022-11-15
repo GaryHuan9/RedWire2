@@ -9,7 +9,9 @@ template<class T>
 class Vector2
 {
 public:
-	explicit Vector2(T x = 0, T y = 0) : x(x), y(y) {}
+	Vector2() : x{}, y{} {}
+
+	Vector2(T x, T y) : x(x), y(y) {}
 
 	explicit Vector2(T value) : Vector2(value, value) {}
 
