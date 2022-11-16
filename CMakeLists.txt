@@ -7,11 +7,14 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/RedWire2/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/RedWire2/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/RedWire2/bin)
 
+set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
+
 add_subdirectory(ext/SFML)
 
 add_executable(RedWire2
         src/main.cpp
         src/Core/Layer.cpp
+        src/Core/Chunk.cpp
         src/Interface/LayerView.cpp
         )
 

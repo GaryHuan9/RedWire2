@@ -3,12 +3,6 @@
 #include "main.hpp"
 #include "Utility/Vector2.hpp"
 
-namespace sf
-{
-	class RenderWindow;
-	class Vertex;
-}
-
 namespace rw
 {
 
@@ -16,6 +10,7 @@ class LayerView
 {
 public:
 	explicit LayerView(float aspect_ratio, float zoom = 1.7f);
+	~LayerView();
 
 	void set_aspect_ratio(float value)
 	{
@@ -61,10 +56,17 @@ public:
 		return result;
 	}
 
-	void draw(sf::RenderWindow& window) const;
+	void draw(sf::RenderWindow& window, const Layer& layer) const
+	{
+		draw_grid(window);
+		draw_layer(window, layer);
+	}
 
 private:
 	void update_zoom();
+
+	void draw_grid(sf::RenderWindow& window) const;
+	void draw_layer(sf::RenderWindow& window, const Layer& layer) const;
 
 	Float2 center;
 	Float2 extend;
@@ -83,4 +85,4 @@ private:
 	static constexpr float GridLineAlpha = 45.0f;
 };
 
-} // rw2
+} // rw

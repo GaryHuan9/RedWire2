@@ -1,4 +1,5 @@
 #include "main.hpp"
+#include "Core/Layer.hpp"
 #include "Interface/LayerView.hpp"
 
 #include <SFML/System.hpp>
@@ -10,6 +11,7 @@ int main()
 	sf::RenderWindow window(sf::VideoMode{ 1920, 1080 }, "RedWire2");
 	window.setVerticalSyncEnabled(true);
 
+	rw::Layer layer;
 	rw::Float2 window_size(window.getSize());
 	rw::LayerView layer_view(window_size.x / window_size.y);
 
@@ -41,13 +43,12 @@ int main()
 				}
 				case sf::Event::MouseWheelScrolled:
 				{
-					layer_view.change_zoom(event.mouseWheelScroll.delta / 32.0f, mouse_percent);
+					layer_view.change_zoom(event.mouseWheelScroll.delta / -32.0f, mouse_percent);
 					break;
 				}
 				default: break;
 			}
 		}
-
 
 		if (sf::Mouse::isButtonPressed(sf::Mouse::Button::Left))
 		{
@@ -55,7 +56,13 @@ int main()
 			layer_view.set_point(mouse_percent, point);
 		}
 
-		layer_view.draw(window);
+		if (sf::Mouse::isButtonPressed(sf::Mouse::Button::Right))
+		{
+			rw::Float2 point = layer_view.get_point(mouse_percent);
+			layer.insert(rw::Float2::floor(point), rw::TileType::Wire);
+		}
+
+		layer_view.draw(window, layer);
 
 		window.display();
 		window.clear(sf::Color::Black);
