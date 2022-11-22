@@ -5,23 +5,20 @@ namespace rw
 
 class WireData
 {
+//public:
+//	[[nodiscard]]
+//	bool get() const { return value != 0; }
+//
+//	void set() { value ^= 1; }
+//
+//	void
+//
+//private:
+//	uint8_t value = false;
 public:
-	[[nodiscard]]
-	bool get() const { return current_value; }
+	explicit WireData(uint32_t color) : color(color) {}
 
-	void set() { next_value = true; }
-
-	bool update()
-	{
-		bool changed = current_value != next_value;
-		current_value = next_value;
-		next_value = false;
-		return changed;
-	}
-
-private:
-	bool current_value = false;
-	bool next_value = false;
+	uint32_t color;
 };
 
 } // rw

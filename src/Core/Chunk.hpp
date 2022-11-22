@@ -20,7 +20,7 @@ public:
 
 	void set(Int2 position, TileTag tile);
 
-	void draw(std::vector<sf::Vertex>& vertices, Float2 scale, Float2 origin) const;
+	void draw(std::vector<sf::Vertex>& vertices, const Layer& layer, Float2 scale, Float2 origin) const;
 
 	static Int2 get_chunk_position(Int2 position) { return { position.x >> Chunk::SizeLog2, position.y >> Chunk::SizeLog2 }; }
 
