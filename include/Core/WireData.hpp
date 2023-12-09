@@ -21,4 +21,4 @@ public:
 	uint32_t color;
 };
 
-} // rw
+}

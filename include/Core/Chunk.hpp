@@ -46,4 +46,4 @@ private:
 
 inline constexpr int32_t Chunk::Size = 1 << SizeLog2;
 
-} // rw
+}

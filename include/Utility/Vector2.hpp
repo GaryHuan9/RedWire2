@@ -86,7 +86,7 @@ inline Int2 Int2::ceil(Int2 value) { return value; }
 template<>
 inline Int2 Int2::floor(Int2 value) { return value; }
 
-} // rw
+}
 
 template<class T>
 struct std::hash<rw::Vector2<T>>

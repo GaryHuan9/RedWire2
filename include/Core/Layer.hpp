@@ -32,4 +32,4 @@ private:
 	std::unordered_map<Int2, Chunk> chunks;
 };
 
-} // rw
+}

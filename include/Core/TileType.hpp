@@ -14,4 +14,4 @@ enum class TileType : uint32_t
 	Transistor
 };
 
-} // rw
+}

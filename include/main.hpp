@@ -14,6 +14,7 @@ namespace sf
 
 class RenderWindow;
 class Vertex;
+class Event;
 
 }
 
@@ -25,9 +26,15 @@ class Layer;
 class TileTag;
 class WireData;
 
+class Application;
+class Component;
+class Timer;
+class LayerView;
+class Controller;
+
 template<class T>
 class Vector2;
 typedef Vector2<float> Float2;
 typedef Vector2<int32_t> Int2;
 
-} // rw
+}

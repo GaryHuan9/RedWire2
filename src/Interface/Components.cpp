@@ -1,14 +1,18 @@
-#include "Interface/LayerView.hpp"
+#include "Interface/Components.hpp"
 #include "Core/Layer.hpp"
 
-#include <SFML/Window.hpp>
-#include <SFML/Graphics.hpp>
+#include "SFML/Window.hpp"
+#include "SFML/Graphics.hpp"
 
 namespace rw
 {
 
-LayerView::LayerView(float aspect_ratio, float zoom)
-	: aspect_ratio(aspect_ratio), zoom(zoom) { update_zoom(); }
+LayerView::LayerView(Application& application) : Component(application)
+{
+	Float2 window_size(window.getSize());
+	aspect_ratio = window_size.x / window_size.y;
+	update_zoom();
+}
 
 LayerView::~LayerView() = default;
 
@@ -79,11 +83,52 @@ void LayerView::draw_layer(sf::RenderWindow& window, const Layer& layer) const
 	Float2 max = get_max();
 
 	Float2 scale = window_size / (max - min);
-//	Float2 origin = (max + min) / -2.0f * scale;
+	//	Float2 origin = (max + min) / -2.0f * scale;
 	layer.draw(vertices, min, max, scale, -min * scale);
 
 	window.draw(vertices.data(), vertices.size(), sf::PrimitiveType::Quads);
 	vertices.clear();
 }
 
-} // rw
+Controller::Controller(Application& application) : Component(application) {}
+
+void Controller::initialize()
+{
+	layer = std::make_unique<Layer>();
+	layer_view = application.find_component<LayerView>();
+	layer_view->set_current_layer(layer.get());
+}
+
+void Controller::update(const Timer& timer)
+{
+	if (!Application::capture_mouse() && sf::Mouse::isButtonPressed(sf::Mouse::Button::Right))
+	{
+		Float2 point = layer_view->get_point(mouse_percent);
+		layer->insert(Float2::floor(point), TileType::Wire);
+	}
+}
+
+void Controller::input_event(const sf::Event& event)
+{
+	Component::input_event(event);
+
+	if (event.type == sf::Event::MouseWheelScrolled)
+	{
+		float delta = event.mouseWheelScroll.delta / -32.0f;
+		layer_view->change_zoom(delta, mouse_percent);
+	}
+	else if (event.type == sf::Event::MouseMoved)
+	{
+		Float2 new_mouse_percent = Float2(event.mouseMove) / Float2(window.getSize());
+
+		if (sf::Mouse::isButtonPressed(sf::Mouse::Button::Left))
+		{
+			Float2 point = layer_view->get_point(mouse_percent);
+			layer_view->set_point(new_mouse_percent, point);
+		}
+
+		mouse_percent = new_mouse_percent;
+	}
+}
+
+}

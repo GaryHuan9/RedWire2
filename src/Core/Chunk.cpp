@@ -43,4 +43,4 @@ void Chunk::draw(std::vector<sf::Vertex>& vertices, const Layer& layer, Float2 s
 	}
 }
 
-} // rw
+}

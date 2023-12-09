@@ -1,6 +1,6 @@
 target_sources(RedWire2 PRIVATE
         main.cpp
-        Core/Layer.cpp
-        Core/Chunk.cpp
-        Interface/LayerView.cpp
 )
+
+add_subdirectory(Core)
+add_subdirectory(Interface)

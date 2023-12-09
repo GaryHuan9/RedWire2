@@ -18,4 +18,4 @@ public:
 	uint32_t index;
 };
 
-} // rw
+}

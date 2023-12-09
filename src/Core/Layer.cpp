@@ -138,4 +138,4 @@ void Layer::set(Int2 position, TileTag tile)
 	if (iterator->second.empty()) chunks.erase(iterator);
 }
 
-} // rw
+}

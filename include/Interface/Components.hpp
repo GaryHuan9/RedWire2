@@ -1,22 +1,30 @@
 #pragma once
 
 #include "main.hpp"
+#include "Application.hpp"
 #include "Utility/Vector2.hpp"
 
 namespace rw
 {
 
-class LayerView
+class LayerView : public Component
 {
 public:
-	explicit LayerView(float aspect_ratio, float zoom = 1.7f);
-	~LayerView();
+	explicit LayerView(Application& application);
+	~LayerView() override;
 
-	void set_aspect_ratio(float value)
+	void initialize() override
 	{
-		if (value == aspect_ratio) return;
-		aspect_ratio = value;
-		update_zoom();
+
+	}
+
+	void update(const Timer& timer) override
+	{
+		//TODO: do some kind of a fetching logic from whoever that owns the Layer
+		if (current_layer == nullptr) return;
+
+		draw_grid(window);
+		draw_layer(window, *current_layer);
 	}
 
 	[[nodiscard]]
@@ -30,6 +38,18 @@ public:
 	{
 		percent = percent * 2.0f - Float2(1.0f);
 		return center + extend * percent;
+	}
+
+	void set_aspect_ratio(float value)
+	{
+		if (value == aspect_ratio) return;
+		aspect_ratio = value;
+		update_zoom();
+	}
+
+	void set_current_layer(Layer* new_current_layer)
+	{
+		current_layer = new_current_layer;
 	}
 
 	void set_point(Float2 percent, Float2 point)
@@ -56,12 +76,6 @@ public:
 		return result;
 	}
 
-	void draw(sf::RenderWindow& window, const Layer& layer) const
-	{
-		draw_grid(window);
-		draw_layer(window, layer);
-	}
-
 private:
 	void update_zoom();
 
@@ -70,9 +84,10 @@ private:
 
 	Float2 center;
 	Float2 extend;
-	float aspect_ratio;
+	float aspect_ratio{};
+	Layer* current_layer{};
 
-	float zoom;
+	float zoom = 1.7f;
 	int32_t zoom_level{};
 	int32_t zoom_gap{};
 	float zoom_scale{};
@@ -85,4 +100,21 @@ private:
 	static constexpr float GridLineAlpha = 45.0f;
 };
 
-} // rw
+class Controller : public Component
+{
+public:
+	explicit Controller(Application& application);
+
+	void initialize() override;
+	void update(const Timer& timer) override;
+
+	void input_event(const sf::Event& event) override;
+
+private:
+	std::unique_ptr<Layer> layer;
+	LayerView* layer_view{};
+
+	Float2 mouse_percent;
+};
+
+}
