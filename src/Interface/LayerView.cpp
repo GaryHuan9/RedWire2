@@ -1,4 +1,4 @@
-#include "LayerView.hpp"
+#include "Interface/LayerView.hpp"
 #include "Core/Layer.hpp"
 
 #include <SFML/Window.hpp>

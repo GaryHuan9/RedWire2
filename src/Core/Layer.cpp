@@ -1,5 +1,5 @@
-#include "Layer.hpp"
-#include "WireData.hpp"
+#include "Core/Layer.hpp"
+#include "Core/WireData.hpp"
 
 #include <SFML/Graphics.hpp>
 #include <random>

@@ -1,6 +1,6 @@
-#include "Chunk.hpp"
-#include "Layer.hpp"
-#include "WireData.hpp"
+#include "Core/Chunk.hpp"
+#include "Core/Layer.hpp"
+#include "Core/WireData.hpp"
 
 #include <SFML/Graphics.hpp>
 

@@ -15,7 +15,7 @@ int main()
 	rw::Float2 window_size(window.getSize());
 	rw::LayerView layer_view(window_size.x / window_size.y);
 
-	rw::Float2 last_mouse_percent = rw::Float2(sf::Mouse::getPosition(window)) / window_size;
+	rw::Float2 last_mouse_percent;
 
 	while (window.isOpen())
 	{
