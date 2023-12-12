@@ -21,10 +21,15 @@ class Event;
 namespace rw
 {
 
-class Chunk;
+class Board;
 class Layer;
+
+class Chunk;
 class TileTag;
-class WireData;
+enum class TileType : uint8_t;
+
+class Wire;
+class Bridge;
 
 class Application;
 class Component;

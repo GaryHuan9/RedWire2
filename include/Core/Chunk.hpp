@@ -1,7 +1,6 @@
 #pragma once
 
 #include "main.hpp"
-#include "TileTag.hpp"
 #include "Utility/Vector2.hpp"
 
 namespace rw
@@ -10,13 +9,11 @@ namespace rw
 class Chunk
 {
 public:
-	Chunk() : tiles(new TileTag[Size * Size]) {}
+	Chunk() : tile_types(new TileType[Size * Size]()), tile_indices(new uint32_t[Size * Size]()) {}
 
-	[[nodiscard]]
-	bool empty() const { return tiles_count == 0; }
+	[[nodiscard]] bool empty() const { return occupied_tiles == 0; }
 
-	[[nodiscard]]
-	TileTag get(Int2 position) const { return tiles[get_index(position)]; }
+	[[nodiscard]] TileTag get(Int2 position) const;
 
 	void set(Int2 position, TileTag tile);
 
@@ -26,10 +23,11 @@ public:
 
 	static Int2 get_local_position(Int2 position) { return { position.x & (Chunk::Size - 1), position.y & (Chunk::Size - 1) }; }
 
-	static const int32_t Size;
+	static constexpr uint32_t SizeLog2 = 5;
+	static constexpr uint32_t Size = 1u << SizeLog2;
 
 private:
-	static int32_t get_index(Int2 position)
+	static uint32_t get_index(Int2 position)
 	{
 		Int2 local_position = get_local_position(position);
 
@@ -38,12 +36,29 @@ private:
 		return local_position.y * Size + local_position.x;
 	}
 
-	size_t tiles_count = 0;
-	std::unique_ptr<TileTag[]> tiles;
-
-	static constexpr int32_t SizeLog2 = 5;
+	size_t occupied_tiles = 0;
+	std::unique_ptr<TileType[]> tile_types;
+	std::unique_ptr<uint32_t[]> tile_indices;
 };
 
-inline constexpr int32_t Chunk::Size = 1 << SizeLog2;
+enum class TileType : uint8_t
+{
+	None,
+	Wire,
+	Bridge,
+	Inverter,
+	Transistor
+};
+
+class TileTag
+{
+public:
+	TileTag() : TileTag(TileType::None, 0) {}
+
+	TileTag(TileType type, uint32_t index) : type(type), index(index) {}
+
+	const TileType type;
+	const uint32_t index;
+};
 
 }

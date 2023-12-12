@@ -17,7 +17,7 @@ public:
 
 	void run();
 
-	template<typename T>
+	template<class T>
 	T* find_component() const
 	{
 		auto predicate = [](const auto& value) { return typeid(*value) == typeid(T); };
@@ -25,7 +25,7 @@ public:
 		return iterator == components.end() ? nullptr : static_cast<T*>(iterator->get());
 	}
 
-	template<typename T, typename... Arguments>
+	template<class T, class... Arguments>
 	T* make_component(Arguments&& ... arguments)
 	{
 		auto predicate = [](const auto& value) { return typeid(*value) == typeid(T); };

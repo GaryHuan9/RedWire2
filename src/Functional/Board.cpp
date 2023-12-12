@@ -1,11 +1,16 @@
-#include "Core/Layer.hpp"
-#include "Core/WireData.hpp"
+#include "Core/Board.hpp"
+#include "Core/Tiles.hpp"
 
 #include <SFML/Graphics.hpp>
 #include <random>
 
 namespace rw
 {
+
+Board::Board()
+{
+
+}
 
 const static std::array<Int2, 4> four_directions = { Int2(1, 0), Int2(-1, 0), Int2(0, 1), Int2(0, -1) };
 
@@ -83,7 +88,7 @@ void Layer::draw(std::vector<sf::Vertex>& vertices, Float2 min, Float2 max, Floa
 
 	auto drawer = [&](Int2 chunk_position, const Chunk& chunk)
 	{
-		Float2 offset(chunk_position * Chunk::Size);
+		Float2 offset(chunk_position * static_cast<int32_t>(Chunk::Size));
 		chunk.draw(vertices, *this, scale, offset * scale + origin);
 	};
 
