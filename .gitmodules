@@ -10,3 +10,6 @@
 	path = ext/imgui-sfml
 	url = https://github.com/SFML/imgui-sfml.git
 	branch = 2.6.x
+[submodule "tests/googletest"]
+	path = tests/googletest
+	url = https://github.com/google/googletest.git

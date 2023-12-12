@@ -1,4 +1,4 @@
-target_sources(RedWire2 PRIVATE
+target_sources(RedWire2.Core PRIVATE
         Application.cpp
         Components.cpp
 )
