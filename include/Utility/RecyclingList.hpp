@@ -24,8 +24,10 @@ public:
 		destruct();
 
 		items = other.items;
+		count = other.count;
 		capacity = other.capacity;
 		other.capacity = 0;
+		other.count = 0;
 
 		allocator = std::move(other.allocator);
 		ranges = std::move(other.ranges);
@@ -34,6 +36,8 @@ public:
 
 	RecyclingList(const RecyclingList&) = delete;
 	RecyclingList& operator=(const RecyclingList&) = delete;
+
+	[[nodiscard]] size_t size() const { return count; }
 
 	[[nodiscard]] const T& operator[](size_t index) const
 	{
@@ -47,7 +51,7 @@ public:
 		return items[index];
 	}
 
-	bool contains(size_t index);
+	[[nodiscard]] bool contains(size_t index) const;
 
 	template<class Action>
 	void for_each(Action action) const
@@ -89,23 +93,23 @@ private:
 	void destruct();
 
 	T* items = nullptr;
+	size_t count = 0;
 	size_t capacity = 0;
 	Allocator allocator;
 	std::map<uint32_t, uint32_t> ranges; //Maps from the end of a range (exclusive) to the start of a range (inclusive)
 };
 
 template<class T, class Alloc>
-bool RecyclingList<T, Alloc>::contains(size_t index)
+bool RecyclingList<T, Alloc>::contains(size_t index) const
 {
 	if (index >= capacity) return false;
-	if (ranges.empty()) return true;
 
 	auto iterator = ranges.upper_bound(index);
-	assert(iterator != ranges.end());
+	if (iterator == ranges.end()) return true;
 
 	uint32_t start = iterator->second;
 	uint32_t end = iterator->first;
-	return index < start || end <= index;
+	return !(start <= index && index < end);
 }
 
 template<class T, class Alloc>
@@ -141,6 +145,7 @@ size_t RecyclingList<T, Alloc>::emplace(Arguments&& ... arguments)
 	if (range.first == range.second) ranges.erase(ranges.begin());
 
 	//Construct object in place
+	++count;
 	std::construct_at(items + index, std::forward<Arguments>(arguments)...);
 	return index;
 }
@@ -150,6 +155,7 @@ void RecyclingList<T, Allocator>::erase(size_t index)
 {
 	assert(contains(index));
 	std::destroy_at(items + index);
+	--count;
 
 	//Updates ranges
 	using Iterator = decltype(ranges)::iterator;
