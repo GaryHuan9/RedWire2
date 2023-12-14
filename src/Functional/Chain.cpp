@@ -32,39 +32,39 @@ bool Chain::erase(Int2 position)
 	return positions.erase(position) > 0;
 }
 
-bool Chain::Segment::contains(Int2 position) const
-{
-	Int2 current = head_position;
-
-	Int2 chunk_position = get_chunk_position(position);
-	Int2 local_position = get_local_position(position);
-	uint32_t local_index = get_local_index(local_position);
-
-	for (size_t i = 0; i < offsets.size(); ++i)
-	{
-		if (current == chunk_position)
-		{
-			uint64_t chunk = chunks[i];
-			uint64_t bit = (chunk >> local_index) & 1;
-			return bit == 1;
-		}
-
-		current = get_offset(offsets[i]);
-	}
-
-	return false;
-}
-
-Int2 Chain::Segment::get_offset(uint8_t packed)
-{
-	switch (packed)
-	{
-		case 0: return { 1, 0 };
-		case 1: return { -1, 0 };
-		case 2: return { 0, 1 };
-		case 3: return { 0, -1 };
-		default: throw std::domain_error("Bad packing.");
-	}
-}
+//bool Chain::Segment::contains(Int2 position) const
+//{
+//	Int2 current = head_position;
+//
+//	Int2 chunk_position = get_chunk_position(position);
+//	Int2 local_position = get_local_position(position);
+//	uint32_t local_index = get_local_index(local_position);
+//
+//	for (size_t i = 0; i < offsets.size(); ++i)
+//	{
+//		if (current == chunk_position)
+//		{
+//			uint64_t chunk = chunks[i];
+//			uint64_t bit = (chunk >> local_index) & 1;
+//			return bit == 1;
+//		}
+//
+//		current = get_offset(offsets[i]);
+//	}
+//
+//	return false;
+//}
+//
+//Int2 Chain::Segment::get_offset(uint8_t packed)
+//{
+//	switch (packed)
+//	{
+//		case 0: return { 1, 0 };
+//		case 1: return { -1, 0 };
+//		case 2: return { 0, 1 };
+//		case 3: return { 0, -1 };
+//		default: throw std::domain_error("Bad packing.");
+//	}
+//}
 
 } // rw

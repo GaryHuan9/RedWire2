@@ -1,5 +1,6 @@
 #include "Interface/Components.hpp"
 #include "Core/Board.hpp"
+#include "Core/Tiles.hpp"
 
 #include "SFML/Window.hpp"
 #include "SFML/Graphics.hpp"
@@ -101,11 +102,12 @@ void Controller::initialize()
 
 void Controller::update(const Timer& timer)
 {
-	if (!Application::capture_mouse() && sf::Mouse::isButtonPressed(sf::Mouse::Button::Right))
-	{
-		Float2 point = layer_view->get_point(mouse_percent);
-		layer->insert(Float2::floor(point), TileType::Wire);
-	}
+	if (Application::capture_mouse()) return;
+
+	Int2 position = Float2::floor(layer_view->get_point(mouse_percent));
+
+	if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::E)) Wire::insert(*layer, position);
+	if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::R)) Wire::erase(*layer, position);
 }
 
 void Controller::input_event(const sf::Event& event)

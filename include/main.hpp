@@ -24,10 +24,10 @@ namespace rw
 class Board;
 class Layer;
 
-class Chunk;
+class Chain;
+
 class TileTag;
 enum class TileType : uint8_t;
-
 class Wire;
 class Bridge;
 
