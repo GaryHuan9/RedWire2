@@ -1,7 +1,7 @@
 #pragma once
 
 #include "main.hpp"
-#include "Utility/Vector2.hpp"
+#include "Utility/Types.hpp"
 #include "Utility/RecyclingList.hpp"
 
 #include <array>
@@ -44,7 +44,7 @@ public:
 	 * @param index The data index if returns true, undefined otherwise.
 	 * @return True if the index was retrieved, false otherwise.
 	 */
-	[[nodiscard]] bool try_get_index(Int2 position, TileType type, uint32_t& index) const;
+	[[nodiscard]] bool try_get_index(Int2 position, TileType type, Index& index) const;
 
 	void set(Int2 position, TileTag tile);
 

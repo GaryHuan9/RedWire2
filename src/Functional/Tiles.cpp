@@ -2,11 +2,12 @@
 #include "Core/Board.hpp"
 
 #include <random>
+#include <queue>
 
 namespace rw
 {
 
-static const std::array<Int2, 4> four_directions = { Int2(1, 0), Int2(-1, 0), Int2(0, 1), Int2(0, -1) };
+static constexpr std::array<Int2, 4> FourDirections = { Int2(1, 0), Int2(-1, 0), Int2(0, 1), Int2(0, -1) };
 
 static uint32_t get_new_color()
 {
@@ -15,14 +16,14 @@ static uint32_t get_new_color()
 	return distribution(random) | 0xFFu;
 }
 
-bool Wire::get_longest_neighbor(const Layer& layer, Int2 position, uint32_t& wire_index)
+bool Wire::get_longest_neighbor(const Layer& layer, Int2 position, Index& wire_index)
 {
 	const auto& wires = layer.get_list<Wire>();
 	size_t max_length = 0;
 
-	for (Int2 direction : four_directions)
+	for (Int2 direction : FourDirections)
 	{
-		uint32_t index;
+		Index index;
 		if (not layer.try_get_index(position + direction, TileType::Wire, index)) continue;
 
 		size_t length = wires[index].length();
@@ -36,14 +37,14 @@ bool Wire::get_longest_neighbor(const Layer& layer, Int2 position, uint32_t& wir
 	return max_length > 0;
 }
 
-void Wire::merge_neighbors(Layer& layer, Int2 position, uint32_t wire_index)
+void Wire::merge_neighbors(Layer& layer, Int2 position, Index wire_index)
 {
 	auto& wires = layer.get_list<Wire>();
 	auto& positions = wires[wire_index].positions;
 
-	for (Int2 direction : four_directions)
+	for (Int2 direction : FourDirections)
 	{
-		uint32_t index;
+		Index index;
 		if (not layer.try_get_index(position + direction, TileType::Wire, index)) continue;
 		if (index == wire_index) continue;
 
@@ -63,7 +64,7 @@ void Wire::insert(Layer& layer, Int2 position)
 	auto& wires = layer.get_list<Wire>();
 
 	//Find longest neighbor wire
-	uint32_t wire_index = 0;
+	Index wire_index;
 	bool has_wire = get_longest_neighbor(layer, position, wire_index);
 	if (not has_wire) wire_index = wires.emplace(get_new_color());
 
@@ -76,7 +77,7 @@ void Wire::insert(Layer& layer, Int2 position)
 	if (has_wire) merge_neighbors(layer, position, wire_index);
 }
 
-bool Wire::erase_wire_position(Layer& layer, Int2 position, uint32_t wire_index)
+bool Wire::erase_wire_position(Layer& layer, Int2 position, Index wire_index)
 {
 	auto& wires = layer.get_list<Wire>();
 	auto& positions = wires[wire_index].positions;
@@ -93,12 +94,12 @@ bool Wire::erase_wire_position(Layer& layer, Int2 position, uint32_t wire_index)
 	return true;
 }
 
-std::vector<Int2> Wire::get_neighbors(const Layer& layer, Int2 position, uint32_t wire_index)
+std::vector<Int2> Wire::get_neighbors(const Layer& layer, Int2 position, Index wire_index)
 {
 	std::vector<Int2> neighbors;
 	auto& positions = layer.get_list<Wire>()[wire_index].positions;
 
-	for (Int2 direction : four_directions)
+	for (Int2 direction : FourDirections)
 	{
 		Int2 neighbor = position + direction;
 		if (not positions.contains(neighbor)) continue;
@@ -108,7 +109,7 @@ std::vector<Int2> Wire::get_neighbors(const Layer& layer, Int2 position, uint32_
 	return neighbors;
 }
 
-void Wire::split_neighbors(Layer& layer, std::vector<Int2>& neighbors, uint32_t wire_index)
+void Wire::split_neighbors(Layer& layer, std::vector<Int2>& neighbors, Index wire_index)
 {
 	//The next procedure can create neighbors.size() - 1 new wires at a maximum
 	//Must reserve to ensure addresses do not move when we emplace new wires
@@ -130,7 +131,7 @@ void Wire::split_neighbors(Layer& layer, std::vector<Int2>& neighbors, uint32_t 
 		Int2 current = frontier.back();
 		frontier.pop_back();
 
-		for (Int2 direction : four_directions)
+		for (Int2 direction : FourDirections)
 		{
 			Int2 next = current + direction;
 			if (not positions.contains(next)) continue;
@@ -150,7 +151,7 @@ void Wire::split_neighbors(Layer& layer, std::vector<Int2>& neighbors, uint32_t 
 	//The same wire no longer connects all positions, need to create new wires
 	do
 	{
-		uint32_t new_index = wires.emplace(get_new_color());
+		Index new_index = wires.emplace(get_new_color());
 		Int2 neighbor = neighbors.back();
 		neighbors.pop_back();
 
@@ -167,7 +168,7 @@ void Wire::split_neighbors(Layer& layer, std::vector<Int2>& neighbors, uint32_t 
 
 			layer.set(current, TileTag(TileType::Wire, new_index));
 
-			for (Int2 direction : four_directions)
+			for (Int2 direction : FourDirections)
 			{
 				Int2 next = current + direction;
 				if (not positions.erase(next)) continue;

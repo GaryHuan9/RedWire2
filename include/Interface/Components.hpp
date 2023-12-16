@@ -2,7 +2,7 @@
 
 #include "main.hpp"
 #include "Application.hpp"
-#include "Utility/Vector2.hpp"
+#include "Utility/Types.hpp"
 
 namespace rw
 {

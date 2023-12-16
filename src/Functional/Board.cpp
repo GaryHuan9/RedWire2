@@ -19,12 +19,12 @@ TileTag Layer::get(Int2 position) const
 	return iterator->second->get(position);
 }
 
-bool Layer::try_get_index(Int2 position, TileType type, uint32_t& index) const
+bool Layer::try_get_index(Int2 position, TileType type, Index& index) const
 {
 	TileTag tile = get(position);
 	if (tile.type != type) return false;
 
-	index = tile.index;
+	index = Index(tile.index);
 	return true;
 }
 

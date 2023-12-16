@@ -1,6 +1,7 @@
 #pragma once
 
 #include "main.hpp"
+#include "Types.hpp"
 #include <map>
 
 namespace rw
@@ -39,30 +40,30 @@ public:
 
 	[[nodiscard]] size_t size() const { return count; }
 
-	[[nodiscard]] const T& operator[](size_t index) const
+	[[nodiscard]] const T& operator[](Index index) const
 	{
 		assert(contains(index));
 		return items[index];
 	}
 
-	T& operator[](size_t index)
+	T& operator[](Index index)
 	{
 		assert(contains(index));
 		return items[index];
 	}
 
-	[[nodiscard]] bool contains(size_t index) const;
+	[[nodiscard]] bool contains(Index index) const;
 
 	template<class Action>
 	void for_each(Action action) const
 	{
-		for_each_index([action, this](size_t index) { action(items[index]); });
+		for_each_index([action, this](Index index) { action(items[index]); });
 	}
 
 	template<class Action>
 	void for_each(Action action)
 	{
-		for_each_index([action, this](size_t index) { action(items[index]); });
+		for_each_index([action, this](Index index) { action(items[index]); });
 	}
 
 	template<class Action>
@@ -71,15 +72,15 @@ public:
 		for_each_range([action, this](uint32_t start, uint32_t end) { for (; start < end; ++start) action(start); });
 	}
 
-	size_t push(const T& value)
+	Index push(const T& value)
 	{
 		return emplace(value);
 	}
 
 	template<class... Arguments>
-	size_t emplace(Arguments&& ... arguments);
+	Index emplace(Arguments&& ... arguments);
 
-	void erase(size_t index);
+	void erase(Index index);
 
 	void reserve(size_t threshold);
 
@@ -110,7 +111,7 @@ private:
 };
 
 template<class T, class Allocator>
-bool RecyclingList<T, Allocator>::contains(size_t index) const
+bool RecyclingList<T, Allocator>::contains(Index index) const
 {
 	if (index >= capacity) return false;
 
@@ -124,7 +125,7 @@ bool RecyclingList<T, Allocator>::contains(size_t index) const
 
 template<class T, class Allocator>
 template<class... Arguments>
-size_t RecyclingList<T, Allocator>::emplace(Arguments&& ... arguments)
+Index RecyclingList<T, Allocator>::emplace(Arguments&& ... arguments)
 {
 	//Ensure capacity
 	++count;
@@ -138,11 +139,11 @@ size_t RecyclingList<T, Allocator>::emplace(Arguments&& ... arguments)
 
 	//Construct object in place
 	std::construct_at(items + index, std::forward<Arguments>(arguments)...);
-	return index;
+	return Index(index);
 }
 
 template<class T, class Allocator>
-void RecyclingList<T, Allocator>::erase(size_t index)
+void RecyclingList<T, Allocator>::erase(Index index)
 {
 	assert(contains(index));
 	std::destroy_at(items + index);

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "main.hpp"
-#include "Utility/Vector2.hpp"
+#include "Utility/Types.hpp"
 #include <unordered_set>
 
 namespace rw
@@ -20,12 +20,12 @@ enum class TileType : uint8_t
 class TileTag
 {
 public:
-	TileTag() : TileTag(TileType::None, 0) {}
+	TileTag() : TileTag(TileType::None, Index()) {}
 
-	TileTag(TileType type, uint32_t index) : type(type), index(index) {}
+	TileTag(TileType type, Index index) : type(type), index(index) {}
 
 	const TileType type;
-	const uint32_t index;
+	const Index index;
 };
 
 class Wire
@@ -42,12 +42,12 @@ public:
 	uint32_t color;
 
 private:
-	static bool get_longest_neighbor(const Layer& layer, Int2 position, uint32_t& wire_index);
-	static void merge_neighbors(Layer& layer, Int2 position, uint32_t wire_index);
+	static bool get_longest_neighbor(const Layer& layer, Int2 position, Index& wire_index);
+	static void merge_neighbors(Layer& layer, Int2 position, Index wire_index);
 
-	static bool erase_wire_position(Layer& layer, Int2 position, uint32_t wire_index);
-	static std::vector<Int2> get_neighbors(const Layer& layer, Int2 position, uint32_t wire_index);
-	static void split_neighbors(Layer& layer, std::vector<Int2>& neighbors, uint32_t wire_index);
+	static bool erase_wire_position(Layer& layer, Int2 position, Index wire_index);
+	static std::vector<Int2> get_neighbors(const Layer& layer, Int2 position, Index wire_index);
+	static void split_neighbors(Layer& layer, std::vector<Int2>& neighbors, Index wire_index);
 
 	std::unordered_set<Int2> positions;
 };
@@ -56,6 +56,8 @@ class Bridge
 {
 public:
 private:
+	uint32_t wire_index_horizontal;
+	uint32_t wire_index_vertical;
 };
 
 }
