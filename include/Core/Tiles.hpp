@@ -1,7 +1,8 @@
 #pragma once
 
 #include "main.hpp"
-#include "Chain.hpp"
+#include "Utility/Vector2.hpp"
+#include <unordered_set>
 
 namespace rw
 {
@@ -29,19 +30,10 @@ public:
 
 class Wire
 {
-	//public:
-	//	[[nodiscard]]
-	//	bool get() const { return value != 0; }
-	//
-	//	void set() { value ^= 1; }
-	//
-	//	void
-	//
-	//private:
-	//	uint8_t value = false;
-
 public:
 	explicit Wire(uint32_t color) : color(color) {}
+
+	[[nodiscard]] uint32_t length() const { return positions.size(); }
 
 	static void insert(Layer& layer, Int2 position);
 
@@ -50,7 +42,14 @@ public:
 	uint32_t color;
 
 private:
-	Chain chain;
+	static bool get_longest_neighbor(const Layer& layer, Int2 position, uint32_t& wire_index);
+	static void merge_neighbors(Layer& layer, Int2 position, uint32_t wire_index);
+
+	static bool erase_wire_position(Layer& layer, Int2 position, uint32_t wire_index);
+	static std::vector<Int2> get_neighbors(const Layer& layer, Int2 position, uint32_t wire_index);
+	static void split_neighbors(Layer& layer, std::vector<Int2>& neighbors, uint32_t wire_index);
+
+	std::unordered_set<Int2> positions;
 };
 
 class Bridge

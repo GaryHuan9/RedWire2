@@ -66,7 +66,10 @@ public:
 	}
 
 	template<class Action>
-	void for_each_index(Action action) const;
+	void for_each_index(Action action) const
+	{
+		for_each_range([action, this](uint32_t start, uint32_t end) { for (; start < end; ++start) action(start); });
+	}
 
 	size_t push(const T& value)
 	{
@@ -77,6 +80,8 @@ public:
 	size_t emplace(Arguments&& ... arguments);
 
 	void erase(size_t index);
+
+	void reserve(size_t threshold);
 
 	friend void swap(RecyclingList& value, RecyclingList& other) noexcept
 	{
@@ -89,7 +94,12 @@ public:
 	}
 
 private:
-	void grow();
+	/**
+	 * Performs an action on each valid range of indices, passed in as start and end parameters.
+	 */
+	template<class Action>
+	void for_each_range(Action action) const;
+
 	void destruct();
 
 	T* items = nullptr;
@@ -99,8 +109,8 @@ private:
 	std::map<uint32_t, uint32_t> ranges; //Maps from the end of a range (exclusive) to the start of a range (inclusive)
 };
 
-template<class T, class Alloc>
-bool RecyclingList<T, Alloc>::contains(size_t index) const
+template<class T, class Allocator>
+bool RecyclingList<T, Allocator>::contains(size_t index) const
 {
 	if (index >= capacity) return false;
 
@@ -112,31 +122,13 @@ bool RecyclingList<T, Alloc>::contains(size_t index) const
 	return !(start <= index && index < end);
 }
 
-template<class T, class Alloc>
-template<class Action>
-void RecyclingList<T, Alloc>::for_each_index(Action action) const
-{
-	auto iterator = ranges.begin();
-	size_t current = 0;
-
-	while (iterator != ranges.end())
-	{
-		std::pair<uint32_t, uint32_t> range = *iterator;
-		for (; current < range.second; ++current) action(current);
-
-		current = range.first;
-		++iterator;
-	}
-
-	for (; current < capacity; ++current) action(current);
-}
-
-template<class T, class Alloc>
+template<class T, class Allocator>
 template<class... Arguments>
-size_t RecyclingList<T, Alloc>::emplace(Arguments&& ... arguments)
+size_t RecyclingList<T, Allocator>::emplace(Arguments&& ... arguments)
 {
-	//Increase capacity
-	if (ranges.empty()) grow();
+	//Ensure capacity
+	++count;
+	if (ranges.empty()) reserve(count);
 	assert(not ranges.empty());
 
 	//Find first empty range
@@ -145,7 +137,6 @@ size_t RecyclingList<T, Alloc>::emplace(Arguments&& ... arguments)
 	if (range.first == range.second) ranges.erase(ranges.begin());
 
 	//Construct object in place
-	++count;
 	std::construct_at(items + index, std::forward<Arguments>(arguments)...);
 	return index;
 }
@@ -173,7 +164,7 @@ void RecyclingList<T, Allocator>::erase(size_t index)
 
 		if (not_begin)
 		{
-			--iterator;
+			iterator = std::prev(iterator);
 			if (iterator->first == index) previous = iterator;
 		}
 	}
@@ -205,23 +196,67 @@ void RecyclingList<T, Allocator>::erase(size_t index)
 }
 
 template<class T, class Allocator>
-void RecyclingList<T, Allocator>::grow()
+void RecyclingList<T, Allocator>::reserve(size_t threshold)
 {
-	assert(ranges.empty());
+	if (threshold <= capacity) return;
 
+	//Calculate new capacity
 	size_t new_capacity = std::max(capacity * 2, 8LLU);
+	while (new_capacity < threshold) new_capacity *= 2;
 	T* new_items = allocator.allocate(new_capacity);
 
+	//Move all valid items
 	if (capacity > 0)
 	{
-		std::uninitialized_move_n(items, capacity, new_items);
+		auto move_items = [new_items, this](uint32_t start, uint32_t end)
+		{
+			T* pointer = items + start;
+			size_t length = end - start;
+			std::uninitialized_move_n(pointer, length, new_items);
+		};
+
+		for_each_range(move_items);
 		allocator.deallocate(items, capacity);
 	}
 
-	ranges.emplace(new_capacity, capacity);
-
-	items = new_items;
+	size_t old_capacity = capacity;
 	capacity = new_capacity;
+	items = new_items;
+
+	//Update ranges
+	if (not ranges.empty())
+	{
+		auto iterator = std::prev(ranges.end());
+
+		if (iterator->first == old_capacity)
+		{
+			auto node = ranges.extract(iterator);
+			node.key() = capacity;
+			ranges.insert(std::move(node));
+			return;
+		}
+	}
+
+	ranges.emplace(capacity, old_capacity);
+}
+
+template<class T, class Allocator>
+template<class Action>
+void RecyclingList<T, Allocator>::for_each_range(Action action) const
+{
+	auto iterator = ranges.begin();
+	size_t current = 0;
+
+	while (iterator != ranges.end())
+	{
+		std::pair<uint32_t, uint32_t> range = *iterator;
+		action(current, range.second);
+
+		current = range.first;
+		++iterator;
+	}
+
+	action(current, capacity);
 }
 
 template<class T, class Allocator>

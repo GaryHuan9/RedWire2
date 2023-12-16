@@ -63,7 +63,7 @@ void Application::run()
 
 		for (auto& component : components) component->update(timer);
 
-		ImGui::ShowDemoWindow();
+		//		ImGui::ShowDemoWindow();
 		ImGui::SFML::Render(*window);
 		window->display();
 	}

@@ -13,141 +13,191 @@ static uint32_t get_new_color()
 	static std::uniform_int_distribution distribution;
 	static std::default_random_engine random(42);
 	return distribution(random) | 0xFFu;
+}
 
+bool Wire::get_longest_neighbor(const Layer& layer, Int2 position, uint32_t& wire_index)
+{
+	const auto& wires = layer.get_list<Wire>();
+	size_t max_length = 0;
+
+	for (Int2 direction : four_directions)
+	{
+		uint32_t index;
+		if (not layer.try_get_index(position + direction, TileType::Wire, index)) continue;
+
+		size_t length = wires[index].length();
+		assert(length > 0);
+
+		if (max_length >= length) continue;
+		max_length = length;
+		wire_index = index;
+	}
+
+	return max_length > 0;
+}
+
+void Wire::merge_neighbors(Layer& layer, Int2 position, uint32_t wire_index)
+{
+	auto& wires = layer.get_list<Wire>();
+	auto& positions = wires[wire_index].positions;
+
+	for (Int2 direction : four_directions)
+	{
+		uint32_t index;
+		if (not layer.try_get_index(position + direction, TileType::Wire, index)) continue;
+		if (index == wire_index) continue;
+
+		for (Int2 current : wires[index].positions)
+		{
+			layer.set(current, TileTag(TileType::Wire, wire_index));
+			positions.insert(current);
+		}
+
+		wires.erase(index);
+	}
 }
 
 void Wire::insert(Layer& layer, Int2 position)
 {
 	if (layer.get(position).type == TileType::Wire) return;
-
 	auto& wires = layer.get_list<Wire>();
 
-	size_t max_size = 0;
-	uint32_t index = 0;
+	//Find longest neighbor wire
+	uint32_t wire_index = 0;
+	bool has_wire = get_longest_neighbor(layer, position, wire_index);
+	if (not has_wire) wire_index = wires.emplace(get_new_color());
 
-	for (Int2 direction : four_directions)
-	{
-		uint32_t data_index;
-		if (not layer.try_get_index(position + direction, TileType::Wire, data_index)) continue;
+	//Add new position to wire
+	auto& positions = wires[wire_index].positions;
+	layer.set(position, TileTag(TileType::Wire, wire_index));
+	positions.insert(position);
 
-		size_t chain_size = wires[data_index].chain.size();
-		assert(chain_size > 0);
-
-		if (max_size >= chain_size) continue;
-		max_size = chain_size;
-		index = data_index;
-	}
-
-	bool new_wire = max_size == 0;
-
-	if (new_wire) index = wires.emplace(get_new_color());
-
-	Chain& chain = wires[index].chain;
-	layer.set(position, TileTag(TileType::Wire, index));
-	chain.insert(position);
-
-	if (new_wire) return;
-
-	for (Int2 direction : four_directions)
-	{
-		uint32_t data_index;
-		if (not layer.try_get_index(position + direction, TileType::Wire, data_index)) continue;
-		if (data_index == index) continue;
-
-		auto fill = [&](Int2 position)
-		{
-			layer.set(position, TileTag(TileType::Wire, index));
-			chain.insert(position);
-		};
-
-		wires[data_index].chain.for_each(fill);
-		wires.erase(data_index);
-	}
+	//Merge all other neighbors together if needed
+	if (has_wire) merge_neighbors(layer, position, wire_index);
 }
 
-void Wire::erase(Layer& layer, Int2 position)
+bool Wire::erase_wire_position(Layer& layer, Int2 position, uint32_t wire_index)
 {
-	TileTag tile = layer.get(position);
-	if (tile.type == TileType::None) return;
-	assert(tile.type == TileType::Wire);
-
 	auto& wires = layer.get_list<Wire>();
-	Chain* chain = &wires[tile.index].chain;
-	layer.set(position, TileTag());
+	auto& positions = wires[wire_index].positions;
 
-	if (chain->size() == 1)
+	if (wires[wire_index].length() == 1)
 	{
-		wires.erase(tile.index);
-		return;
+		assert(positions.contains(position));
+		wires.erase(wire_index);
+		return false;
 	}
 
-	chain->erase(position);
+	bool erased = positions.erase(position);
+	assert(erased);
+	return true;
+}
 
+std::vector<Int2> Wire::get_neighbors(const Layer& layer, Int2 position, uint32_t wire_index)
+{
 	std::vector<Int2> neighbors;
+	auto& positions = layer.get_list<Wire>()[wire_index].positions;
 
 	for (Int2 direction : four_directions)
 	{
 		Int2 neighbor = position + direction;
-		if (not chain->contains(neighbor)) continue;
+		if (not positions.contains(neighbor)) continue;
 		neighbors.push_back(neighbor);
 	}
 
-	if (neighbors.size() == 1) return;
+	return neighbors;
+}
 
-	bool first = true;
+void Wire::split_neighbors(Layer& layer, std::vector<Int2>& neighbors, uint32_t wire_index)
+{
+	//The next procedure can create neighbors.size() - 1 new wires at a maximum
+	//Must reserve to ensure addresses do not move when we emplace new wires
+	auto& wires = layer.get_list<Wire>();
+	wires.reserve(wires.size() + neighbors.size() - 1);
+	auto& positions = wires[wire_index].positions;
 
-	while (not neighbors.empty())
+	//Initialize depth first search
+	std::vector<Int2> frontier;
+	std::unordered_set<Int2> visited;
+
+	frontier.push_back(neighbors.back());
+	visited.insert(neighbors.back());
+	neighbors.pop_back();
+
+	//Perform first search, tries to reach all neighbors
+	do
 	{
+		Int2 current = frontier.back();
+		frontier.pop_back();
+
+		for (Int2 direction : four_directions)
+		{
+			Int2 next = current + direction;
+			if (not positions.contains(next)) continue;
+			if (not visited.insert(next).second) continue;
+
+			//Immediately stop search if all neighbors are connected
+			auto iterator = std::find(neighbors.begin(), neighbors.end(), next);
+			if (iterator != neighbors.end() && (neighbors.erase(iterator), neighbors.empty())) return;
+
+			frontier.push_back(next);
+		}
+	}
+	while (not frontier.empty());
+
+	visited.clear();
+
+	//The same wire no longer connects all positions, need to create new wires
+	do
+	{
+		uint32_t new_index = wires.emplace(get_new_color());
 		Int2 neighbor = neighbors.back();
 		neighbors.pop_back();
 
-		std::vector<Int2> frontier;
-		std::unordered_set<Int2> visited;
-
 		frontier.push_back(neighbor);
 		visited.insert(neighbor);
+		bool erased = positions.erase(neighbor);
+		assert(erased);
 
-		uint32_t index = 0;
-		Chain* new_chain = nullptr;
-
-		if (not first)
+		//Perform full search to change all connected tiles to this new wire
+		do
 		{
-			index = wires.emplace(get_new_color());
-			new_chain = &wires[index].chain;
-			chain = &wires[tile.index].chain;
-		}
-
-		while (not frontier.empty())
-		{
-			Int2 local = frontier.back();
+			Int2 current = frontier.back();
 			frontier.pop_back();
 
-			auto iterator = std::find(neighbors.begin(), neighbors.end(), local);
-
-			if (iterator != neighbors.end())
-			{
-				neighbors.erase(iterator);
-				if (first && neighbors.empty()) break;
-			}
-
-			if (not first)
-			{
-				layer.set(local, TileTag(TileType::Wire, index));
-				new_chain->insert(local);
-				chain->erase(local);
-			}
+			layer.set(current, TileTag(TileType::Wire, new_index));
 
 			for (Int2 direction : four_directions)
 			{
-				Int2 offset = local + direction;
-				if (not chain->contains(offset)) continue;
-				if (not visited.insert(offset).second) continue;
-				frontier.push_back(offset);
+				Int2 next = current + direction;
+				if (not positions.erase(next)) continue;
+				bool inserted = visited.insert(next).second;
+				assert(inserted);
+
+				frontier.push_back(next);
 			}
 		}
+		while (not frontier.empty());
 
-		first = false;
+		//Assign connected tiles to data
+		std::erase_if(neighbors, [&visited](Int2 current) { return visited.contains(current); });
+		std::swap(wires[new_index].positions, visited);
+		assert(visited.empty());
 	}
+	while (not neighbors.empty());
+}
+
+void Wire::erase(Layer& layer, Int2 position)
+{
+	TileTag wire = layer.get(position);
+	if (wire.type == TileType::None) return;
+	assert(wire.type == TileType::Wire);
+
+	layer.set(position, TileTag());
+
+	if (not erase_wire_position(layer, position, wire.index)) return;
+	std::vector<Int2> neighbors = get_neighbors(layer, position, wire.index);
+	if (neighbors.size() > 1) split_neighbors(layer, neighbors, wire.index);
 }
 
 }
