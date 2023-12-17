@@ -1,0 +1,6 @@
+all gates have one output port and 1 to 3 input ports
+inverter: output is high if the number of input highs is even (xnor)
+transistor: output is high if all connected inputs are high (and)
+
+bridge: not a gate, but provide horizontal and vertical bypassing, can also add optional spillage so horizontal highs are outputted to vertical or vice versa
+tunnel: signal connection between neighboring layers

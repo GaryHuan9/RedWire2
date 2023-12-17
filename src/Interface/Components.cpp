@@ -107,7 +107,10 @@ void Controller::update(const Timer& timer)
 	Int2 position = Float2::floor(layer_view->get_point(mouse_percent));
 
 	if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::E)) Wire::insert(*layer, position);
-	if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::R)) Wire::erase(*layer, position);
+	if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Q)) Wire::erase(*layer, position);
+
+	if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::D)) Bridge::insert(*layer, position);
+	if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::A)) Bridge::erase(*layer, position);
 }
 
 void Controller::input_event(const sf::Event& event)

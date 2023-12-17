@@ -88,7 +88,7 @@ void Layer::draw(std::vector<sf::Vertex>& vertices, Float2 min, Float2 max, Floa
 TileTag Layer::Chunk::get(Int2 position) const
 {
 	size_t index = get_index(position);
-	return { tile_types[index], tile_indices[index] };
+	return { tile_types[index], Index(tile_indices[index]) };
 }
 
 void Layer::Chunk::set(Int2 position, TileTag tile)
@@ -118,17 +118,34 @@ void Layer::Chunk::draw(std::vector<sf::Vertex>& vertices, const Layer& layer, F
 		{
 			Int2 position(x, y);
 			TileTag tile = get(position);
-			if (tile.type != TileType::Wire) continue;
+			uint32_t color = 0x050505FF;
+
+			switch (tile.type)
+			{
+				case TileType::Wire:
+				{
+					color = layer.get_list<Wire>()[tile.index].color;
+					break;
+				}
+				case TileType::Bridge:
+				{
+					color = 0x333333FF;
+					break;
+				}
+				default: continue;
+			}
 
 			Float2 corner0 = Float2(position) * scale + origin;
 			Float2 corner1 = corner0 + scale;
 
-			sf::Color color(layer.get_list<Wire>()[tile.index].color);
+			vertices.emplace_back(sf::Vector2f(corner0.x, corner0.y), sf::Color(color));
+			vertices.emplace_back(sf::Vector2f(corner1.x, corner0.y), sf::Color(color));
+			vertices.emplace_back(sf::Vector2f(corner1.x, corner1.y), sf::Color(color));
+			vertices.emplace_back(sf::Vector2f(corner0.x, corner1.y), sf::Color(color));
 
-			vertices.emplace_back(sf::Vector2f(corner0.x, corner0.y), color);
-			vertices.emplace_back(sf::Vector2f(corner1.x, corner0.y), color);
-			vertices.emplace_back(sf::Vector2f(corner1.x, corner1.y), color);
-			vertices.emplace_back(sf::Vector2f(corner0.x, corner1.y), color);
+			if (tile.type != TileType::Wire) continue;
+
+
 		}
 	}
 }

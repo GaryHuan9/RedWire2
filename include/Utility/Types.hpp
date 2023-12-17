@@ -84,23 +84,6 @@ inline constexpr Int2 Int2::ceil(Int2 value) { return value; }
 template<>
 inline constexpr Int2 Int2::floor(Int2 value) { return value; }
 
-}
-
-template<class T>
-struct std::hash<rw::Vector2<T>>
-{
-	size_t operator()(rw::Vector2<T> value) const noexcept
-	{
-		std::hash<T> hasher;
-		size_t x = hasher(value.x);
-		size_t y = hasher(value.y);
-		return x ^ (y + 0x9E3779B9 + (x << 6) + (x >> 2));
-	}
-};
-
-namespace rw
-{
-
 class Index
 {
 public:
@@ -130,6 +113,31 @@ public:
 
 private:
 	uint32_t data;
+};
+
+}
+
+namespace std
+{
+
+template<>
+struct hash<rw::Int2>
+{
+	size_t operator()(rw::Int2 value) const noexcept
+	{
+		size_t x = std::hash<int32_t>()(value.x);
+		size_t y = std::hash<int32_t>()(value.y);
+		return x ^ (y + 0x9E3779B9 + (x << 6) + (x >> 2));
+	}
+};
+
+template<>
+struct hash<rw::Index>
+{
+	size_t operator()(rw::Index value) const noexcept
+	{
+		return std::hash<uint32_t>()(value);
+	}
 };
 
 }

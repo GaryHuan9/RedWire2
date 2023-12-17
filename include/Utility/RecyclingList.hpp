@@ -69,7 +69,7 @@ public:
 	template<class Action>
 	void for_each_index(Action action) const
 	{
-		for_each_range([action, this](uint32_t start, uint32_t end) { for (; start < end; ++start) action(start); });
+		for_each_range([action, this](uint32_t start, uint32_t end) { for (; start < end; ++start) action(Index(start)); });
 	}
 
 	Index push(const T& value)
