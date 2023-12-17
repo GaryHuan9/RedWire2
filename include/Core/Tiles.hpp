@@ -48,8 +48,9 @@ private:
 	static std::vector<Int2> get_neighbors(const Layer& layer, Int2 position, std::span<const Int2> directions, bool use_bridge = true);
 	static std::vector<Int2> get_neighbors(const Layer& layer, Int2 position, Index wire_index);
 
-	static Index merge_neighbors(Layer& layer, const std::vector<Int2>& neighbors);
-	static void split_neighbors(Layer& layer, std::vector<Int2>& neighbors, Index wire_index);
+	static Index merge_positions(Layer& layer, const std::vector<Int2>& positions);
+	static void split_positions(Layer& layer, std::vector<Int2>& positions);
+	static void split_positions(Layer& layer, std::vector<Int2>& positions, Index wire_index);
 
 	std::unordered_set<Int2> positions;
 	std::unordered_set<Int2> bridges;

@@ -6,7 +6,7 @@
 namespace rw
 {
 
-Board::Board() : main_layer(std::make_unique<Layer>()) {}
+Board::Board() = default;
 
 Layer::Layer() = default;
 Layer::~Layer() = default;
@@ -19,13 +19,12 @@ TileTag Layer::get(Int2 position) const
 	return iterator->second->get(position);
 }
 
-bool Layer::try_get_index(Int2 position, TileType type, Index& index) const
+bool Layer::has(Int2 position, TileType type) const
 {
-	TileTag tile = get(position);
-	if (tile.type != type) return false;
-
-	index = Index(tile.index);
-	return true;
+	Int2 chunk_position = Chunk::get_chunk_position(position);
+	auto iterator = chunks.find(chunk_position);
+	if (iterator == chunks.end()) return false;
+	return iterator->second->get(position).type == type;
 }
 
 void Layer::set(Int2 position, TileTag tile)
@@ -142,10 +141,6 @@ void Layer::Chunk::draw(std::vector<sf::Vertex>& vertices, const Layer& layer, F
 			vertices.emplace_back(sf::Vector2f(corner1.x, corner0.y), sf::Color(color));
 			vertices.emplace_back(sf::Vector2f(corner1.x, corner1.y), sf::Color(color));
 			vertices.emplace_back(sf::Vector2f(corner0.x, corner1.y), sf::Color(color));
-
-			if (tile.type != TileType::Wire) continue;
-
-
 		}
 	}
 }

@@ -99,6 +99,7 @@ void Application::process_event(const sf::Event& event)
 		{
 			sf::Vector2f size(sf::Vector2u(event.size.width, event.size.height));
 			window->setView(sf::View(size / 2.0f, size));
+			distribute(event);
 			break;
 		}
 		case sf::Event::MouseMoved:

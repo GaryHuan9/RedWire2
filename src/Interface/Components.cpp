@@ -4,6 +4,7 @@
 
 #include "SFML/Window.hpp"
 #include "SFML/Graphics.hpp"
+#include "imgui.h"
 
 namespace rw
 {
@@ -11,11 +12,28 @@ namespace rw
 LayerView::LayerView(Application& application) : Component(application)
 {
 	Float2 window_size(window.getSize());
-	aspect_ratio = window_size.x / window_size.y;
-	update_zoom();
+	set_aspect_ratio(window_size.x / window_size.y);
 }
 
 LayerView::~LayerView() = default;
+
+void LayerView::update(const Timer& timer)
+{
+	//TODO: do some kind of a fetching logic from whoever that owns the Layer
+	if (current_layer == nullptr) return;
+
+	draw_grid(window);
+	draw_layer(window, *current_layer);
+}
+
+void LayerView::input_event(const sf::Event& event)
+{
+	Component::input_event(event);
+	if (event.type != sf::Event::Resized) return;
+
+	Float2 window_size(window.getSize());
+	set_aspect_ratio(window_size.x / window_size.y);
+}
 
 void LayerView::update_zoom()
 {
@@ -37,7 +55,7 @@ void LayerView::draw_grid(sf::RenderWindow& window) const
 	Float2 min = get_min();
 	Float2 max = get_max();
 
-	Float2 scale = window_size / 2.0f / extend;
+	float scale = window_size.x / 2.0f / extend.x; //This factor should be the same on both axes, using X here
 	Float2 origin = window_size / 2.0f - center * scale;
 
 	auto drawer = [&](int32_t gap, float percent)
@@ -50,7 +68,7 @@ void LayerView::draw_grid(sf::RenderWindow& window) const
 
 		for (int32_t int_x = int_min.x; int_x <= int_max.x; int_x += gap)
 		{
-			float x = std::fma(static_cast<float>(int_x), scale.x, origin.x);
+			float x = std::fma(static_cast<float>(int_x), scale, origin.x);
 
 			vertices.emplace_back(sf::Vector2f(x, 0.0f), color);
 			vertices.emplace_back(sf::Vector2f(x, window_size.y), color);
@@ -58,7 +76,7 @@ void LayerView::draw_grid(sf::RenderWindow& window) const
 
 		for (int32_t int_y = int_min.y; int_y <= int_max.y; int_y += gap)
 		{
-			float y = std::fma(static_cast<float>(int_y), scale.x, origin.y);
+			float y = std::fma(static_cast<float>(int_y), scale, origin.y);
 
 			vertices.emplace_back(sf::Vector2f(0.0f, y), color);
 			vertices.emplace_back(sf::Vector2f(window_size.x, y), color);
@@ -102,15 +120,49 @@ void Controller::initialize()
 
 void Controller::update(const Timer& timer)
 {
-	if (Application::capture_mouse()) return;
+	static constexpr std::array Tools = { "Move", "Remove", "Wire", "Bridge" };
 
-	Int2 position = Float2::floor(layer_view->get_point(mouse_percent));
+	if (ImGui::Begin("Tools"))
+	{
+		int* pointer = reinterpret_cast<int*>(&selected_tool);
+		ImGui::SliderInt("Selected", pointer, 0, Tools.size() - 1, Tools[selected_tool]);
+	}
 
-	if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::E)) Wire::insert(*layer, position);
-	if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Q)) Wire::erase(*layer, position);
+	ImGui::End();
 
-	if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::D)) Bridge::insert(*layer, position);
-	if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::A)) Bridge::erase(*layer, position);
+	if (not Application::capture_mouse())
+	{
+		if (sf::Mouse::isButtonPressed(sf::Mouse::Button::Right)) selected_tool = 0;
+		else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::F)) selected_tool = 1;
+		else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num1)) selected_tool = 2;
+		else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num2)) selected_tool = 3;
+
+		if (sf::Mouse::isButtonPressed(sf::Mouse::Button::Left))
+		{
+			Int2 position = Float2::floor(layer_view->get_point(mouse_percent));
+			TileTag tile = layer->get(position);
+
+			switch (selected_tool)
+			{
+				case 1:
+				{
+					if (tile.type == TileType::Wire) Wire::erase(*layer, position);
+					if (tile.type == TileType::Bridge) Bridge::erase(*layer, position);
+					break;
+				}
+				case 2:
+				{
+					if (tile.type == TileType::None) Wire::insert(*layer, position);
+					break;
+				}
+				case 3:
+				{
+					if (tile.type == TileType::None) Bridge::insert(*layer, position);
+					break;
+				}
+			}
+		}
+	}
 }
 
 void Controller::input_event(const sf::Event& event)
@@ -126,7 +178,7 @@ void Controller::input_event(const sf::Event& event)
 	{
 		Float2 new_mouse_percent = Float2(event.mouseMove) / Float2(window.getSize());
 
-		if (sf::Mouse::isButtonPressed(sf::Mouse::Button::Left))
+		if (selected_tool == 0 && sf::Mouse::isButtonPressed(sf::Mouse::Button::Left))
 		{
 			Float2 point = layer_view->get_point(mouse_percent);
 			layer_view->set_point(new_mouse_percent, point);

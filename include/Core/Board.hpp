@@ -16,13 +16,12 @@ class Board
 public:
 	Board();
 
-	[[nodiscard]] const Layer& get_layer() const { return *main_layer; }
+	[[nodiscard]] const Layer& get_layer(Index index) const { return layers[index]; }
 
-	Layer& get_list() { return *main_layer; }
+	Layer& get_layer(Index index) { return layers[index]; }
 
 private:
-	//	std::vector<Layer> layers; //TODO: add this in when we support layers
-	std::unique_ptr<Layer> main_layer;
+	std::vector<Layer> layers;
 };
 
 class Layer
@@ -39,12 +38,7 @@ public:
 
 	[[nodiscard]] TileTag get(Int2 position) const;
 
-	/**
-	 * Tries to get the data index of the tile at `position`, if it is `type`.
-	 * @param index The data index if returns true, undefined otherwise.
-	 * @return True if the index was retrieved, false otherwise.
-	 */
-	[[nodiscard]] bool try_get_index(Int2 position, TileType type, Index& index) const;
+	[[nodiscard]] bool has(Int2 position, TileType type) const;
 
 	void set(Int2 position, TileTag tile);
 

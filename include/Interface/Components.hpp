@@ -18,14 +18,9 @@ public:
 
 	}
 
-	void update(const Timer& timer) override
-	{
-		//TODO: do some kind of a fetching logic from whoever that owns the Layer
-		if (current_layer == nullptr) return;
+	void update(const Timer& timer) override;
 
-		draw_grid(window);
-		draw_layer(window, *current_layer);
-	}
+	void input_event(const sf::Event& event) override;
 
 	[[nodiscard]]
 	Float2 get_min() const { return center - extend; }
@@ -115,6 +110,7 @@ private:
 	LayerView* layer_view{};
 
 	Float2 mouse_percent;
+	uint32_t selected_tool = 0;
 };
 
 }

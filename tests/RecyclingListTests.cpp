@@ -1,5 +1,6 @@
-#include "gtest/gtest.h"
 #include "Utility/RecyclingList.hpp"
+
+#include "gtest/gtest.h"
 
 #include <string>
 #include <random>
@@ -22,23 +23,28 @@ protected:
 
 		for (size_t i = 0; i < reference.size(); ++i)
 		{
-			ASSERT_EQ(list.contains(i), !reference[i].empty());
-			if (reference[i].empty()) continue;
+			Index index(i);
+			ASSERT_EQ(list.contains(index), !reference[index].empty());
+			if (reference[index].empty()) continue;
 
 			++count;
-			ASSERT_EQ(list[i], reference[i]);
+			ASSERT_EQ(list[index], reference[index]);
 		}
 
 		ASSERT_EQ(list.size(), count);
 
 		size_t current = 0;
 
-		list.for_each_index([&](size_t index)
-		                    {
-			                    while (current < reference.size() && reference[current].empty()) ++current;
-			                    ASSERT_EQ(reference[current], list[current]);
-			                    ASSERT_EQ(current++, index);
-		                    });
+		auto assert_index = [&](Index index)
+		{
+			while (current < reference.size() && reference[current].empty()) ++current;
+
+			ASSERT_EQ(current, index);
+			ASSERT_EQ(reference[current], list[index]);
+			++current;
+		};
+
+		list.for_each_index(assert_index);
 
 		while (current < reference.size() && reference[current].empty()) ++current;
 		ASSERT_EQ(current, reference.size());
@@ -49,7 +55,7 @@ protected:
 		assert(!value.empty());
 
 		auto iterator = std::find(reference.begin(), reference.end(), "");
-		size_t index = std::distance(reference.begin(), iterator);
+		Index index(std::distance(reference.begin(), iterator));
 
 		if (iterator == reference.end()) reference.push_back(value);
 		else reference[index] = value;
@@ -58,7 +64,7 @@ protected:
 		assert_contents();
 	}
 
-	void erase(size_t index)
+	void erase(Index index)
 	{
 		assert(!reference[index].empty());
 		ASSERT_TRUE(list.contains(index));
@@ -77,21 +83,21 @@ TEST_F(RecyclingListTests, Simple)
 {
 	emplace("hello");
 	emplace("world");
-	erase(0);
+	erase(Index(0));
 	emplace("new");
-	erase(1);
-	erase(0);
+	erase(Index(1));
+	erase(Index(0));
 }
 
 TEST_F(RecyclingListTests, Loop)
 {
 	for (size_t i = 0; i < 10; ++i) emplace(std::to_string(i));
 
-	for (size_t i : { 1, 7, 3, 0, 5, 2, 8, 6, 9, 4 }) erase(i);
+	for (size_t i : { 1, 7, 3, 0, 5, 2, 8, 6, 9, 4 }) erase(Index(i));
 
 	for (size_t i = 0; i < 16; ++i) emplace(std::to_string(i));
 
-	for (size_t i = 9; i < 13; ++i) erase(i);
+	for (size_t i = 9; i < 13; ++i) erase(Index(i));
 
 	for (size_t i = 0; i < 7; ++i) emplace(std::to_string(i));
 }
@@ -106,7 +112,7 @@ TEST_F(RecyclingListTests, Random)
 		if (i % 3 != 0) continue;
 
 		std::uniform_int_distribution<size_t> distribution(0, list.size() - 1);
-		size_t index = distribution(random);
+		Index index(distribution(random));
 		if (list.contains(index)) erase(index);
 	}
 }
