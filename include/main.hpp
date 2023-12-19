@@ -27,16 +27,18 @@ class Board;
 class Layer;
 class DrawContext;
 
+class TileType;
 class TileTag;
-enum class TileType : uint8_t;
 class Wire;
 class Bridge;
+class Gate;
 
 class Application;
 class Component;
 class Timer;
 class LayerView;
 class Controller;
+class Debugger;
 
 template<class T>
 class Vector2;

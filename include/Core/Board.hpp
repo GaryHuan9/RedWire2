@@ -84,7 +84,7 @@ public:
 	static constexpr uint32_t Size = 1u << SizeLog2;
 
 private:
-	void update_vertices() const;
+	void update_vertices(DrawContext& context) const;
 
 	static uint32_t get_index(Int2 position)
 	{
@@ -109,9 +109,28 @@ class DrawContext
 public:
 	DrawContext(sf::RenderWindow& window, const sf::RenderStates& states_wire, const sf::RenderStates& states_static);
 
+	/**
+	 * Emplace a new quad onto the current vertices batch.
+	 */
+	void emplace(bool wire, Float2 corner0, Float2 corner1, uint32_t color);
+
+	/**
+	 * Flushes batched vertices on the CPU to a buffer on GPU memory.
+	 */
+	void batch_buffer(bool wire, sf::VertexBuffer& buffer);
+
+	/**
+	 * Draws GPU buffer.
+	 */
+	void draw(bool wire, const sf::VertexBuffer& buffer);
+
+private:
 	sf::RenderWindow& window;
 	const sf::RenderStates& states_wire;
 	const sf::RenderStates& states_static;
+
+	std::vector<sf::Vertex> vertices_wire;
+	std::vector<sf::Vertex> vertices_static;
 };
 
 }

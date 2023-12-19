@@ -18,6 +18,20 @@ static uint32_t get_new_color()
 	return distribution(random) | 0xFFu;
 }
 
+const char* TileType::to_string() const
+{
+	switch (get_switch())
+	{
+		case TileType::None: return "None";
+		case TileType::Wire: return "Wire";
+		case TileType::Bridge: return "Bridge";
+		case TileType::Gate: return "Gate";
+		case TileType::Note: return "Note";
+	}
+
+	return "Unknown";
+}
+
 Wire::Wire()
 #ifndef NDEBUG
 	: color(get_new_color())
@@ -369,6 +383,16 @@ void Bridge::erase(Layer& layer, Int2 position)
 	}
 
 	Wire::split_positions(layer, neighbors);
+}
+
+void Gate::insert(Layer& layer, Int2 position)
+{
+
+}
+
+void Gate::erase(Layer& layer, Int2 position)
+{
+
 }
 
 }

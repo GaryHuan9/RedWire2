@@ -6,6 +6,8 @@
 #include "SFML/Graphics.hpp"
 #include "imgui.h"
 
+#include <sstream>
+
 namespace rw
 {
 
@@ -33,6 +35,24 @@ void LayerView::input_event(const sf::Event& event)
 
 	Float2 window_size(window.getSize());
 	set_aspect_ratio(window_size.x / window_size.y);
+}
+
+Float2 LayerView::get_point(Float2 percent) const
+{
+	percent = percent * 2.0f - Float2(1.0f);
+	return center + extend * percent;
+}
+
+sf::RenderStates LayerView::get_render_states() const
+{
+	float scale;
+	Float2 origin;
+	get_scale_origin(scale, origin);
+
+	sf::RenderStates states;
+	states.transform.translate(origin.x, origin.y);
+	states.transform.scale(scale, scale);
+	return states;
 }
 
 void LayerView::update_zoom()
@@ -103,16 +123,8 @@ void LayerView::draw_grid(sf::RenderWindow& window) const
 
 void LayerView::draw_layer(sf::RenderWindow& window, const Layer& layer) const
 {
-	float scale;
-	Float2 origin;
-	get_scale_origin(scale, origin);
-
-	sf::RenderStates states;
-	states.transform.translate(origin.x, origin.y);
-	states.transform.scale(scale, scale);
-
-	sf::RenderStates states_wire = states;
-	sf::RenderStates states_static = states;
+	sf::RenderStates states_wire = get_render_states();
+	sf::RenderStates states_static = states_wire;
 	DrawContext context(window, states_wire, states_static);
 	layer.draw(context, get_min(), get_max());
 }
@@ -130,44 +142,57 @@ void Controller::update(const Timer& timer)
 {
 	static constexpr std::array Tools = { "Move", "Remove", "Wire", "Bridge" };
 
-	if (ImGui::Begin("Tools"))
+	if (ImGui::Begin("Controller"))
 	{
 		int* pointer = reinterpret_cast<int*>(&selected_tool);
-		ImGui::SliderInt("Selected", pointer, 0, Tools.size() - 1, Tools[selected_tool]);
+		ImGui::SliderInt("Tool", pointer, 0, Tools.size() - 1, Tools[selected_tool]);
 	}
 
 	ImGui::End();
 
-	if (not Application::capture_mouse())
 	{
-		if (sf::Mouse::isButtonPressed(sf::Mouse::Button::Right)) selected_tool = 0;
-		else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::F)) selected_tool = 1;
-		else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num1)) selected_tool = 2;
-		else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num2)) selected_tool = 3;
+		Float2 mouse(sf::Mouse::getPosition(window));
+		Float2 old_mouse_percent = mouse_percent;
+		mouse_percent = Float2(mouse) / Float2(window.getSize());
+		mouse_delta = mouse_percent - old_mouse_percent;
+	}
 
-		if (sf::Mouse::isButtonPressed(sf::Mouse::Button::Left))
+	Int2 position;
+	if (not try_get_mouse_position(position)) return;
+
+	if (sf::Mouse::isButtonPressed(sf::Mouse::Button::Right)) selected_tool = 0;
+	else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::F)) selected_tool = 1;
+	else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num1)) selected_tool = 2;
+	else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num2)) selected_tool = 3;
+
+	if (sf::Mouse::isButtonPressed(sf::Mouse::Button::Left))
+	{
+		TileTag tile = layer->get(position);
+
+		switch (selected_tool)
 		{
-			Int2 position = Float2::floor(layer_view->get_point(mouse_percent));
-			TileTag tile = layer->get(position);
-
-			switch (selected_tool)
+			case 0:
 			{
-				case 1:
-				{
-					if (tile.type == TileType::Wire) Wire::erase(*layer, position);
-					if (tile.type == TileType::Bridge) Bridge::erase(*layer, position);
-					break;
-				}
-				case 2:
-				{
-					if (tile.type == TileType::None) Wire::insert(*layer, position);
-					break;
-				}
-				case 3:
-				{
-					if (tile.type == TileType::None) Bridge::insert(*layer, position);
-					break;
-				}
+				Float2 old_mouse_percent = mouse_percent - mouse_delta;
+				Float2 old_point = layer_view->get_point(old_mouse_percent);
+				layer_view->set_point(mouse_percent, old_point);
+				break;
+			}
+			case 1:
+			{
+				if (tile.type == TileType::Wire) Wire::erase(*layer, position);
+				if (tile.type == TileType::Bridge) Bridge::erase(*layer, position);
+				break;
+			}
+			case 2:
+			{
+				if (tile.type == TileType::None) Wire::insert(*layer, position);
+				break;
+			}
+			case 3:
+			{
+				if (tile.type == TileType::None) Bridge::insert(*layer, position);
+				break;
 			}
 		}
 	}
@@ -177,23 +202,58 @@ void Controller::input_event(const sf::Event& event)
 {
 	Component::input_event(event);
 
-	if (event.type == sf::Event::MouseWheelScrolled)
-	{
-		float delta = event.mouseWheelScroll.delta / -32.0f;
-		layer_view->change_zoom(delta, mouse_percent);
-	}
-	else if (event.type == sf::Event::MouseMoved)
-	{
-		Float2 new_mouse_percent = Float2(event.mouseMove) / Float2(window.getSize());
+	if (event.type != sf::Event::MouseWheelScrolled) return;
+	float delta = event.mouseWheelScroll.delta / -32.0f;
+	layer_view->change_zoom(delta, mouse_percent);
+}
 
-		if (selected_tool == 0 && sf::Mouse::isButtonPressed(sf::Mouse::Button::Left))
+bool Controller::try_get_mouse_position(Int2& position) const
+{
+	if (not application.handle_mouse()) return false;
+	position = Float2::floor(layer_view->get_point(mouse_percent));
+	return true;
+}
+
+Debugger::Debugger(Application& application) : Component(application) {}
+
+void Debugger::initialize()
+{
+	layer_view = application.find_component<LayerView>();
+	controller = application.find_component<Controller>();
+}
+
+void Debugger::update(const Timer& timer)
+{
+	if (not ImGui::Begin("Debugger"))
+	{
+		ImGui::End();
+		return;
+	}
+
+	if (controller == nullptr || layer_view == nullptr) return;
+	if (controller->get_layer() == nullptr) return;
+	Layer& layer = *controller->get_layer();
+
+	if (Int2 position; controller->try_get_mouse_position(position))
+	{
+		auto to_string = []<class T>(const T& value)
 		{
-			Float2 point = layer_view->get_point(mouse_percent);
-			layer_view->set_point(new_mouse_percent, point);
-		}
+			std::stringstream stream;
+			stream << value;
+			return stream.str();
+		};
 
-		mouse_percent = new_mouse_percent;
+		TileTag tile = layer.get(position);
+		ImGui::LabelText("Mouse Position", to_string(position).c_str());
+		ImGui::LabelText("Tile Type", tile.type.to_string());
+
+		if (tile.type != TileType::None)
+		{
+			ImGui::LabelText("Tile Index", std::to_string(tile.index).c_str());
+		}
 	}
+
+	ImGui::End();
 }
 
 }

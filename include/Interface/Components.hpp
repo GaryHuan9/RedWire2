@@ -22,18 +22,13 @@ public:
 
 	void input_event(const sf::Event& event) override;
 
-	[[nodiscard]]
-	Float2 get_min() const { return center - extend; }
+	[[nodiscard]] Float2 get_min() const { return center - extend; }
 
-	[[nodiscard]]
-	Float2 get_max() const { return center + extend; }
+	[[nodiscard]] Float2 get_max() const { return center + extend; }
 
-	[[nodiscard]]
-	Float2 get_point(Float2 percent) const
-	{
-		percent = percent * 2.0f - Float2(1.0f);
-		return center + extend * percent;
-	}
+	[[nodiscard]] Float2 get_point(Float2 percent) const;
+
+	[[nodiscard]] sf::RenderStates get_render_states() const;
 
 	void set_aspect_ratio(float value)
 	{
@@ -104,15 +99,32 @@ public:
 
 	void initialize() override;
 	void update(const Timer& timer) override;
-
 	void input_event(const sf::Event& event) override;
+
+	[[nodiscard]] Layer* get_layer() const { return layer.get(); }
+
+	bool try_get_mouse_position(Int2& position) const;
 
 private:
 	std::unique_ptr<Layer> layer;
 	LayerView* layer_view{};
 
 	Float2 mouse_percent;
+	Float2 mouse_delta;
 	uint32_t selected_tool = 0;
+};
+
+class Debugger : public Component
+{
+public:
+	explicit Debugger(Application& application);
+
+	void initialize() override;
+	void update(const Timer& timer) override;
+
+private:
+	LayerView* layer_view{};
+	Controller* controller{};
 };
 
 }

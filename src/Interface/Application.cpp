@@ -36,6 +36,10 @@ Application::Application()
 
 	make_component<LayerView>();
 	make_component<Controller>();
+
+#ifndef NDEBUG
+	make_component<Debugger>();
+#endif
 }
 
 Application::~Application()
@@ -69,14 +73,14 @@ void Application::run()
 	}
 }
 
-bool Application::capture_mouse()
+bool Application::handle_mouse() const
 {
-	return ImGui::GetIO().WantCaptureMouse;
+	return not ImGui::GetIO().WantCaptureMouse && window->hasFocus();
 }
 
-bool Application::capture_keyboard()
+bool Application::handle_keyboard() const
 {
-	return ImGui::GetIO().WantCaptureKeyboard;
+	return not ImGui::GetIO().WantCaptureKeyboard && window->hasFocus();
 }
 
 void Application::process_event(const sf::Event& event)
@@ -107,13 +111,13 @@ void Application::process_event(const sf::Event& event)
 		case sf::Event::MouseButtonPressed:
 		case sf::Event::MouseButtonReleased:
 		{
-			if (capture_mouse()) break;
+			if (not handle_mouse()) break;
 			distribute(event);
 		}
 		case sf::Event::KeyPressed:
 		case sf::Event::KeyReleased:
 		{
-			if (capture_keyboard()) break;
+			if (not handle_keyboard()) break;
 			distribute(event);
 		}
 		default: break;

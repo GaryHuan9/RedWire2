@@ -18,7 +18,7 @@ public:
 	void run();
 
 	template<class T>
-	T* find_component() const
+	[[nodiscard]] T* find_component() const
 	{
 		auto predicate = [](const auto& value) { return typeid(*value) == typeid(T); };
 		auto iterator = std::ranges::find_if(components, predicate);
@@ -38,13 +38,10 @@ public:
 		return pointer;
 	}
 
-	[[nodiscard]] sf::RenderWindow* get_window() const
-	{
-		return window.get();
-	}
+	[[nodiscard]] sf::RenderWindow* get_window() const { return window.get(); }
 
-	[[nodiscard]] static bool capture_mouse();
-	[[nodiscard]] static bool capture_keyboard();
+	[[nodiscard]] bool handle_mouse() const;
+	[[nodiscard]] bool handle_keyboard() const;
 
 private:
 	void process_event(const sf::Event& event);

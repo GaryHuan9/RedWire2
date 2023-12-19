@@ -4,3 +4,17 @@ transistor: output is high if all connected inputs are high (and)
 
 bridge: not a gate, but provide horizontal and vertical bypassing, can also add optional spillage so horizontal highs are outputted to vertical or vice versa
 tunnel: signal connection between neighboring layers
+
+One we way to make supporting modules easier is by disallowing the placement of gates near a module's edge.
+Or we can simply draw a box around the module and say gates do not work across boundaries.
+
+TODO:
+- add inverter and transistor
+- support connecting to gates around wires
+- begin work on wire update engine
+- support copy and pasting
+- support saving and loading files
+- create and use PositionMap and PositionSet to accelerate searching
+- add greedy meshing (single axis)
+- add vertex buffer batching between chunks
+- add modules system

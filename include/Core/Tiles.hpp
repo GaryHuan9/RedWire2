@@ -9,14 +9,30 @@
 namespace rw
 {
 
-enum class TileType : uint8_t
+class TileType
 {
-	None,
-	Wire,
-	Bridge,
-	Note,
-	Inverter,
-	Transistor
+public:
+	enum Value : uint8_t
+	{
+		None,
+		Wire,
+		Bridge,
+		Gate,
+		Note
+	};
+
+	constexpr TileType(Value value = Value::None) : value(value) {} // NOLINT(*-explicit-constructor)
+
+	[[nodiscard]] Value get_switch() const { return value; }
+
+	[[nodiscard]] const char* to_string() const;
+
+	[[nodiscard]] constexpr bool operator==(TileType other) const { return value == other.value; }
+
+	[[nodiscard]] constexpr bool operator!=(TileType other) const { return value != other.value; }
+
+private:
+	Value value;
 };
 
 struct TileTag
@@ -39,6 +55,8 @@ public:
 	static void insert(Layer& layer, Int2 position);
 
 	static void erase(Layer& layer, Int2 position);
+
+	static void draw(const Layer& layer, Index index);
 
 #ifndef NDEBUG
 	const uint32_t color;
@@ -67,6 +85,16 @@ public:
 	static void insert(Layer& layer, Int2 position);
 
 	static void erase(Layer& layer, Int2 position);
+private:
+};
+
+class Gate
+{
+public:
+	static void insert(Layer& layer, Int2 position);
+
+	static void erase(Layer& layer, Int2 position);
+
 private:
 };
 

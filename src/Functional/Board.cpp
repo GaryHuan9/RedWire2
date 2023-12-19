@@ -122,19 +122,16 @@ void Layer::Chunk::draw(DrawContext& context) const
 {
 	if (vertices_dirty)
 	{
-		update_vertices();
+		update_vertices(context);
 		vertices_dirty = false;
 	}
 
-	context.window.draw(*vertices_wire, context.states_wire);
-	context.window.draw(*vertices_static, context.states_static);
+	context.draw(true, *vertices_wire);
+	context.draw(false, *vertices_static);
 }
 
-void Layer::Chunk::update_vertices() const
+void Layer::Chunk::update_vertices(DrawContext& context) const
 {
-	std::vector<sf::Vertex> wires;
-	std::vector<sf::Vertex> statics;
-
 	for (int32_t y = 0; y < Size; ++y)
 	{
 		for (int32_t x = 0; x < Size; ++x)
@@ -143,7 +140,7 @@ void Layer::Chunk::update_vertices() const
 			TileTag tile = get(position);
 			uint32_t color = 0x050505FF;
 
-			switch (tile.type)
+			switch (tile.type.get_switch())
 			{
 				case TileType::Wire:
 				{
@@ -161,21 +158,40 @@ void Layer::Chunk::update_vertices() const
 			auto corner0 = Float2(position + chunk_position);
 			Float2 corner1 = corner0 + Float2(1.0f);
 
-			auto& buffer = (tile.type == TileType::Wire ? wires : statics);
-			buffer.emplace_back(sf::Vector2f(corner0.x, corner0.y), sf::Color(color));
-			buffer.emplace_back(sf::Vector2f(corner1.x, corner0.y), sf::Color(color));
-			buffer.emplace_back(sf::Vector2f(corner1.x, corner1.y), sf::Color(color));
-			buffer.emplace_back(sf::Vector2f(corner0.x, corner1.y), sf::Color(color));
+			context.emplace(tile.type == TileType::Wire, corner0, corner1, color);
 		}
 	}
 
-	vertices_wire->create(wires.size());
-	vertices_wire->update(wires.data());
-	vertices_static->create(statics.size());
-	vertices_static->update(statics.data());
+	context.batch_buffer(true, *vertices_wire);
+	context.batch_buffer(false, *vertices_static);
 }
 
 DrawContext::DrawContext(sf::RenderWindow& window, const sf::RenderStates& states_wire, const sf::RenderStates& states_static) :
 	window(window), states_wire(states_wire), states_static(states_static) {}
+
+void DrawContext::emplace(bool wire, Float2 corner0, Float2 corner1, uint32_t color)
+{
+	sf::Color sf_color(color);
+	auto& vertices = (wire ? vertices_wire : vertices_static);
+	vertices.emplace_back(sf::Vector2f(corner0.x, corner0.y), sf_color, sf::Vector2f(0.0f, 0.0f));
+	vertices.emplace_back(sf::Vector2f(corner1.x, corner0.y), sf_color, sf::Vector2f(1.0f, 0.0f));
+	vertices.emplace_back(sf::Vector2f(corner1.x, corner1.y), sf_color, sf::Vector2f(1.0f, 1.0f));
+	vertices.emplace_back(sf::Vector2f(corner0.x, corner1.y), sf_color, sf::Vector2f(0.0f, 1.0f));
+}
+
+void DrawContext::batch_buffer(bool wire, sf::VertexBuffer& buffer)
+{
+	size_t size = buffer.getVertexCount();
+	auto& vertices = (wire ? vertices_wire : vertices_static);
+	if (size != vertices.size()) buffer.create(vertices.size());
+
+	buffer.update(vertices.data());
+	vertices.clear();
+}
+
+void DrawContext::draw(bool wire, const sf::VertexBuffer& buffer)
+{
+	window.draw(buffer, wire ? states_wire : states_static);
+}
 
 }
