@@ -35,81 +35,105 @@ void Layer::set(Int2 position, TileTag tile)
 	if (iterator == chunks.end())
 	{
 		if (tile.type == TileType::None) return;
-		auto pair = chunks.emplace(chunk_position, std::make_unique<Chunk>());
+
+		auto chunk = std::make_unique<Chunk>(*this, chunk_position * Chunk::Size);
+		auto pair = chunks.emplace(chunk_position, std::move(chunk));
 
 		assert(pair.second);
 		iterator = pair.first;
 	}
 
 	Chunk& chunk = *iterator->second;
-	chunk.set(position, tile);
-	if (chunk.empty()) chunks.erase(iterator);
+	bool has_tiles = chunk.set(position, tile);
+	if (not has_tiles) chunks.erase(iterator);
 }
 
-void Layer::draw(std::vector<sf::Vertex>& vertices, Float2 min, Float2 max, Float2 scale, Float2 origin) const
+void Layer::draw(DrawContext& context, Float2 min_position, Float2 max_position) const
 {
-	Int2 chunk_min = Chunk::get_chunk_position(Float2::floor(min));
-	Int2 chunk_max = Chunk::get_chunk_position(Float2::ceil(max));
-
-	Int2 search_area = chunk_max - chunk_min;
-
-	auto drawer = [&](Int2 chunk_position, const Chunk& chunk)
-	{
-		Float2 offset(chunk_position * static_cast<int32_t>(Chunk::Size));
-		chunk.draw(vertices, *this, scale, offset * scale + origin);
-	};
+	Int2 min_chunk = Chunk::get_chunk_position(Float2::floor(min_position));
+	Int2 max_chunk = Chunk::get_chunk_position(Float2::ceil(max_position) - Int2(1)); //max_chunk is inclusive
+	Int2 search_area = min_chunk - max_chunk;
 
 	if (chunks.size() < search_area.x * search_area.y)
 	{
 		for (const auto& pair : chunks)
 		{
 			Int2 chunk_position = pair.first;
-			if (chunk_min.x <= chunk_position.x && chunk_position.x <= chunk_max.x &&
-			    chunk_min.y <= chunk_position.y && chunk_position.y <= chunk_max.y)
-				drawer(chunk_position, *pair.second);
+			if (min_chunk.x > chunk_position.x || chunk_position.x > max_chunk.x) continue;
+			if (min_chunk.y > chunk_position.y || chunk_position.y > max_chunk.y) continue;
+			pair.second->draw(context);
 		}
 	}
 	else
 	{
-		for (int32_t y = chunk_min.y; y <= chunk_max.y; ++y)
+		for (int32_t y = min_chunk.y; y <= max_chunk.y; ++y)
 		{
-			for (int32_t x = chunk_min.x; x <= chunk_max.x; ++x)
+			for (int32_t x = min_chunk.x; x <= max_chunk.x; ++x)
 			{
-				Int2 chunk_position(x, y);
-				auto iterator = chunks.find(chunk_position);
+				auto iterator = chunks.find(Int2(x, y));
 				if (iterator == chunks.end()) continue;
-				drawer(chunk_position, *iterator->second);
+				iterator->second->draw(context);
 			}
 		}
 	}
 }
 
+Layer::Chunk::Chunk(const Layer& layer, Int2 chunk_position) :
+	layer(layer), chunk_position(chunk_position),
+	tile_types(new TileType[Size * Size]()),
+	tile_indices(new uint32_t[Size * Size]()),
+	vertices_wire(std::make_unique<sf::VertexBuffer>(sf::PrimitiveType::Quads, sf::VertexBuffer::Usage::Dynamic)),
+	vertices_static(std::make_unique<sf::VertexBuffer>(sf::PrimitiveType::Quads, sf::VertexBuffer::Usage::Dynamic)) {}
+
 TileTag Layer::Chunk::get(Int2 position) const
 {
 	size_t index = get_index(position);
-	return { tile_types[index], Index(tile_indices[index]) };
+	TileType type = tile_types[index];
+	if (type == TileType::None) return {};
+	return { type, Index(tile_indices[index]) };
 }
 
-void Layer::Chunk::set(Int2 position, TileTag tile)
+bool Layer::Chunk::set(Int2 position, TileTag tile)
 {
-	size_t index = get_index(position);
+	uint32_t index = get_index(position);
 	TileType& type = tile_types[index];
-	if (type != TileType::None) --occupied_tiles;
 
-	if (tile.type == TileType::None)
+	if (type == tile.type && (type == TileType::None || tile_indices[index] == tile.index)) return occupied_tiles > 0;
+
+	if (type != TileType::None)
 	{
-		type = TileType::None;
-		return;
+		assert(occupied_tiles > 0);
+		--occupied_tiles;
+		vertices_dirty = true;
 	}
 
-	++occupied_tiles;
+	if (tile.type != TileType::None)
+	{
+		++occupied_tiles;
+		vertices_dirty = true;
+		tile_indices[index] = tile.index;
+	}
+
 	type = tile.type;
-	tile_indices[index] = tile.index;
+	return true;
 }
 
-void Layer::Chunk::draw(std::vector<sf::Vertex>& vertices, const Layer& layer, Float2 scale, Float2 origin) const
+void Layer::Chunk::draw(DrawContext& context) const
 {
-	if (empty()) return;
+	if (vertices_dirty)
+	{
+		update_vertices();
+		vertices_dirty = false;
+	}
+
+	context.window.draw(*vertices_wire, context.states_wire);
+	context.window.draw(*vertices_static, context.states_static);
+}
+
+void Layer::Chunk::update_vertices() const
+{
+	std::vector<sf::Vertex> wires;
+	std::vector<sf::Vertex> statics;
 
 	for (int32_t y = 0; y < Size; ++y)
 	{
@@ -134,15 +158,24 @@ void Layer::Chunk::draw(std::vector<sf::Vertex>& vertices, const Layer& layer, F
 				default: continue;
 			}
 
-			Float2 corner0 = Float2(position) * scale + origin;
-			Float2 corner1 = corner0 + scale;
+			auto corner0 = Float2(position + chunk_position);
+			Float2 corner1 = corner0 + Float2(1.0f);
 
-			vertices.emplace_back(sf::Vector2f(corner0.x, corner0.y), sf::Color(color));
-			vertices.emplace_back(sf::Vector2f(corner1.x, corner0.y), sf::Color(color));
-			vertices.emplace_back(sf::Vector2f(corner1.x, corner1.y), sf::Color(color));
-			vertices.emplace_back(sf::Vector2f(corner0.x, corner1.y), sf::Color(color));
+			auto& buffer = (tile.type == TileType::Wire ? wires : statics);
+			buffer.emplace_back(sf::Vector2f(corner0.x, corner0.y), sf::Color(color));
+			buffer.emplace_back(sf::Vector2f(corner1.x, corner0.y), sf::Color(color));
+			buffer.emplace_back(sf::Vector2f(corner1.x, corner1.y), sf::Color(color));
+			buffer.emplace_back(sf::Vector2f(corner0.x, corner1.y), sf::Color(color));
 		}
 	}
+
+	vertices_wire->create(wires.size());
+	vertices_wire->update(wires.data());
+	vertices_static->create(statics.size());
+	vertices_static->update(statics.data());
 }
+
+DrawContext::DrawContext(sf::RenderWindow& window, const sf::RenderStates& states_wire, const sf::RenderStates& states_static) :
+	window(window), states_wire(states_wire), states_static(states_static) {}
 
 }

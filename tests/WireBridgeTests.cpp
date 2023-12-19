@@ -3,9 +3,6 @@
 #include "Core/Tiles.hpp"
 
 #include "gtest/gtest.h"
-
-#include <string>
-#include <random>
 #include <unordered_set>
 
 using namespace rw;

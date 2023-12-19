@@ -48,15 +48,22 @@ void LayerView::update_zoom()
 	extend = Float2(zoom_scale * aspect_ratio, zoom_scale);
 }
 
-void LayerView::draw_grid(sf::RenderWindow& window) const
+void LayerView::get_scale_origin(float& scale, Float2& origin) const
 {
 	auto window_size = Float2(window.getSize());
+	scale = window_size.x / 2.0f / extend.x; //This factor should be the same on both axes, using X here
+	origin = window_size / 2.0f - center * scale;
+}
 
+void LayerView::draw_grid(sf::RenderWindow& window) const
+{
+	float scale;
+	Float2 origin;
+	get_scale_origin(scale, origin);
+
+	auto window_size = Float2(window.getSize());
 	Float2 min = get_min();
 	Float2 max = get_max();
-
-	float scale = window_size.x / 2.0f / extend.x; //This factor should be the same on both axes, using X here
-	Float2 origin = window_size / 2.0f - center * scale;
 
 	auto drawer = [&](int32_t gap, float percent)
 	{
@@ -96,17 +103,18 @@ void LayerView::draw_grid(sf::RenderWindow& window) const
 
 void LayerView::draw_layer(sf::RenderWindow& window, const Layer& layer) const
 {
-	auto window_size = Float2(window.getSize());
+	float scale;
+	Float2 origin;
+	get_scale_origin(scale, origin);
 
-	Float2 min = get_min();
-	Float2 max = get_max();
+	sf::RenderStates states;
+	states.transform.translate(origin.x, origin.y);
+	states.transform.scale(scale, scale);
 
-	Float2 scale = window_size / (max - min);
-	//	Float2 origin = (max + min) / -2.0f * scale;
-	layer.draw(vertices, min, max, scale, -min * scale);
-
-	window.draw(vertices.data(), vertices.size(), sf::PrimitiveType::Quads);
-	vertices.clear();
+	sf::RenderStates states_wire = states;
+	sf::RenderStates states_static = states;
+	DrawContext context(window, states_wire, states_static);
+	layer.draw(context, get_min(), get_max());
 }
 
 Controller::Controller(Application& application) : Component(application) {}

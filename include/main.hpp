@@ -12,9 +12,11 @@
 namespace sf
 {
 
-class RenderWindow;
-class Vertex;
 class Event;
+class Vertex;
+class RenderWindow;
+class VertexBuffer;
+class RenderStates;
 
 }
 
@@ -23,8 +25,7 @@ namespace rw
 
 class Board;
 class Layer;
-
-class Chain;
+class DrawContext;
 
 class TileTag;
 enum class TileType : uint8_t;

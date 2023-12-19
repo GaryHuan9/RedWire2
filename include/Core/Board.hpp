@@ -42,7 +42,7 @@ public:
 
 	void set(Int2 position, TileTag tile);
 
-	void draw(std::vector<sf::Vertex>& vertices, Float2 min, Float2 max, Float2 scale, Float2 origin) const;
+	void draw(DrawContext& context, Float2 min_position, Float2 max_position) const;
 
 private:
 	class Chunk;
@@ -65,24 +65,27 @@ private:
 class Layer::Chunk
 {
 public:
-	Chunk() : tile_types(new TileType[Size * Size]()), tile_indices(new uint32_t[Size * Size]()) {}
-
-	[[nodiscard]] bool empty() const { return occupied_tiles == 0; }
+	Chunk(const Layer& layer, Int2 chunk_position);
 
 	[[nodiscard]] TileTag get(Int2 position) const;
 
-	void set(Int2 position, TileTag tile);
+	bool set(Int2 position, TileTag tile);
 
-	void draw(std::vector<sf::Vertex>& vertices, const Layer& layer, Float2 scale, Float2 origin) const;
+	void draw(DrawContext& context) const;
 
 	static Int2 get_chunk_position(Int2 position) { return { position.x >> Chunk::SizeLog2, position.y >> Chunk::SizeLog2 }; }
 
 	static Int2 get_local_position(Int2 position) { return { position.x & (Chunk::Size - 1), position.y & (Chunk::Size - 1) }; }
 
+	const Layer& layer;
+	const Int2 chunk_position;
+
 	static constexpr uint32_t SizeLog2 = 5;
 	static constexpr uint32_t Size = 1u << SizeLog2;
 
 private:
+	void update_vertices() const;
+
 	static uint32_t get_index(Int2 position)
 	{
 		Int2 local_position = get_local_position(position);
@@ -92,9 +95,23 @@ private:
 		return local_position.y * Size + local_position.x;
 	}
 
-	size_t occupied_tiles = 0;
+	uint32_t occupied_tiles = 0;
 	std::unique_ptr<TileType[]> tile_types;
 	std::unique_ptr<uint32_t[]> tile_indices;
+
+	mutable bool vertices_dirty = false;
+	std::unique_ptr<sf::VertexBuffer> vertices_wire;
+	std::unique_ptr<sf::VertexBuffer> vertices_static;
+};
+
+class DrawContext
+{
+public:
+	DrawContext(sf::RenderWindow& window, const sf::RenderStates& states_wire, const sf::RenderStates& states_static);
+
+	sf::RenderWindow& window;
+	const sf::RenderStates& states_wire;
+	const sf::RenderStates& states_static;
 };
 
 }

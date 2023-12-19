@@ -74,6 +74,8 @@ public:
 private:
 	void update_zoom();
 
+	void get_scale_origin(float& scale, Float2& origin) const;
+
 	void draw_grid(sf::RenderWindow& window) const;
 	void draw_layer(sf::RenderWindow& window, const Layer& layer) const;
 
