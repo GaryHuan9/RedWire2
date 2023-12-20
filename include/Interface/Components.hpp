@@ -3,6 +3,7 @@
 #include "main.hpp"
 #include "Application.hpp"
 #include "Utility/Types.hpp"
+#include "Core/Tiles.hpp"
 
 namespace rw
 {
@@ -112,6 +113,7 @@ private:
 	Float2 mouse_percent;
 	Float2 mouse_delta;
 	uint32_t selected_tool = 0;
+	TileRotation rotation;
 };
 
 class Debugger : public Component

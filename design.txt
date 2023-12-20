@@ -4,9 +4,10 @@ transistor: output is high if all connected inputs are high (and)
 
 bridge: not a gate, but provide horizontal and vertical bypassing, can also add optional spillage so horizontal highs are outputted to vertical or vice versa
 tunnel: signal connection between neighboring layers
+the graphics for these two can simply contain an extra carved out section that is colored with the wire, pointing towards the output direction
 
-One we way to make supporting modules easier is by disallowing the placement of gates near a module's edge.
-Or we can simply draw a box around the module and say gates do not work across boundaries.
+one we way to make supporting modules easier is by disallowing the placement of gates near a module's edge.
+or we can simply draw a box around the module and say gates do not work across boundaries.
 
 TODO:
 - add inverter and transistor

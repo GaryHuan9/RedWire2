@@ -89,17 +89,12 @@ class Index
 public:
 	constexpr Index() : data(static_cast<uint32_t>(-1)) {}
 
-	constexpr explicit Index(uint32_t data) : data(data)
-	{
-		assert(valid());
-	}
+	constexpr explicit Index(uint32_t data) : data(data) { assert(valid()); }
 
-	[[nodiscard]] constexpr bool valid() const
-	{
-		return data != Index().data;
-	}
+	[[nodiscard]] constexpr bool valid() const { return data != Index().data; }
 
-	[[nodiscard]] constexpr uint32_t value() const
+	[[nodiscard]]
+	constexpr uint32_t value() const
 	{
 		assert(valid());
 		return data;
@@ -107,9 +102,15 @@ public:
 
 	constexpr operator uint32_t() const { return value(); } // NOLINT(*-explicit-constructor)
 
-	constexpr bool operator==(const Index& rhs) const { return data == rhs.data; }
+	constexpr bool operator==(Index value) const { return data == value.data; }
 
-	constexpr bool operator!=(const Index& rhs) const { return !(rhs == *this); }
+	constexpr bool operator!=(Index value) const { return not operator==(value); }
+
+	friend std::ostream& operator<<(std::ostream& stream, Index value)
+	{
+		if (value.valid()) return stream << value.value();
+		return stream << "Invalid Index";
+	}
 
 private:
 	uint32_t data;

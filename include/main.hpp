@@ -29,6 +29,7 @@ class DrawContext;
 
 class TileType;
 class TileTag;
+class TileRotation;
 class Wire;
 class Bridge;
 class Gate;

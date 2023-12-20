@@ -37,16 +37,26 @@ static auto set_intersect(const std::unordered_set<T>& set0, const std::unordere
 
 const char* TileType::to_string() const
 {
-	switch (get_switch())
-	{
-		case TileType::None: return "None";
-		case TileType::Wire: return "Wire";
-		case TileType::Bridge: return "Bridge";
-		case TileType::Gate: return "Gate";
-		case TileType::Note: return "Note";
-	}
+	static constexpr std::array<const char*, 5> Strings = { "None", "Wire", "Bridge", "Gate", "Note" };
+	return Strings[get_value()];
+}
 
-	return "Unknown";
+TileRotation TileRotation::get_next() const
+{
+	static constexpr std::array<TileRotation, 4> NextValues = { TileRotation::South, TileRotation::North,
+	                                                            TileRotation::West, TileRotation::East };
+	return NextValues[get_value()];
+}
+
+Int2 TileRotation::get_direction() const
+{
+	return FourDirections[get_value()];
+}
+
+const char* TileRotation::to_string() const
+{
+	static constexpr std::array<const char*, 5> Strings = { "East", "West", "South", "North" };
+	return Strings[get_value()];
 }
 
 Wire::Wire()
@@ -73,6 +83,7 @@ void Wire::insert(Layer& layer, Int2 position)
 	auto& wire = wires[wire_index];
 	wire.positions.insert(position);
 	layer.set(position, TileTag(TileType::Wire, wire_index));
+	update_neighbors_gates(layer, position);
 
 	//Add neighboring bridges to wire
 	for (Int2 direction : FourDirections)
@@ -90,10 +101,11 @@ void Wire::erase(Layer& layer, Int2 position)
 	if (tile.type == TileType::None) return;
 	assert(tile.type == TileType::Wire);
 
-	//Remove tile position from wire
+	//Remove tile position from wire and layer
 	auto& wires = layer.get_list<Wire>();
 	Wire& wire = wires[tile.index];
 	layer.set(position, TileTag());
+	update_neighbors_gates(layer, position);
 
 	assert(not wire.bridges.contains(position));
 	assert(wire.positions.contains(position));
@@ -191,6 +203,17 @@ std::vector<Int2> Wire::fix_neighbors_bridges(Wire& wire, Int2 position)
 	return neighbors;
 }
 
+void Wire::update_neighbors_gates(Layer& layer, Int2 position)
+{
+	assert(layer.has(position, TileType::Wire));
+
+	for (Int2 direction : FourDirections)
+	{
+		Int2 current = position + direction;
+		if (layer.has(current, TileType::Gate)) Gate::update(layer, current);
+	}
+}
+
 Index Wire::merge_positions(Layer& layer, const std::vector<Int2>& positions)
 {
 	if (positions.empty()) return {};
@@ -216,14 +239,18 @@ Index Wire::merge_positions(Layer& layer, const std::vector<Int2>& positions)
 	//Merge other wires together
 	Wire& wire = wires[wire_index];
 
-	for (Int2 neighbor : positions)
+	for (Int2 position : positions)
 	{
-		TileTag tile = layer.get(neighbor);
+		TileTag tile = layer.get(position);
 		assert(tile.type == TileType::Wire);
 		if (tile.index == wire_index) continue;
-
 		const Wire& old_wire = wires[tile.index];
-		for (Int2 current : old_wire.positions) layer.set(current, TileTag(TileType::Wire, wire_index));
+
+		for (Int2 current : old_wire.positions)
+		{
+			layer.set(current, TileTag(TileType::Wire, wire_index));
+			update_neighbors_gates(layer, current);
+		}
 
 		//Union the two sets
 		wire.positions.insert(old_wire.positions.begin(), old_wire.positions.end());
@@ -274,9 +301,9 @@ void Wire::split_positions(Layer& layer, std::vector<Int2>& positions)
 
 void Wire::split_positions(Layer& layer, std::vector<Int2>& positions, Index wire_index)
 {
-	for (Int2 neighbor : positions)
+	for (Int2 position : positions)
 	{
-		TileTag tile = layer.get(neighbor);
+		TileTag tile = layer.get(position);
 		assert(tile.type == TileType::Wire);
 		assert(tile.index == wire_index);
 	}
@@ -331,13 +358,16 @@ void Wire::split_positions(Layer& layer, std::vector<Int2>& positions, Index wir
 	do
 	{
 		Index new_index = wires.emplace();
-		Int2 neighbor = positions.back();
-		positions.pop_back();
 
-		frontier.push_back(neighbor);
-		visited.insert(neighbor);
-		bool erased = wire.positions.erase(neighbor);
-		assert(erased);
+		{
+			Int2 current = positions.back();
+			positions.pop_back();
+
+			frontier.push_back(current);
+			visited.insert(current);
+			bool erased = wire.positions.erase(current);
+			assert(erased);
+		}
 
 		//Perform full search to change all connected tiles to this new wire
 		do
@@ -346,6 +376,7 @@ void Wire::split_positions(Layer& layer, std::vector<Int2>& positions, Index wir
 			frontier.pop_back();
 
 			layer.set(current, TileTag(TileType::Wire, new_index));
+			update_neighbors_gates(layer, current);
 
 			for (Int2 direction : FourDirections)
 			{
@@ -414,12 +445,12 @@ void Bridge::insert(Layer& layer, Int2 position)
 
 void Bridge::erase(Layer& layer, Int2 position)
 {
-	TileTag bridge = layer.get(position);
-	if (bridge.type == TileType::None) return;
-	assert(bridge.type == TileType::Bridge);
+	TileTag tile = layer.get(position);
+	if (tile.type == TileType::None) return;
+	assert(tile.type == TileType::Bridge);
 
 	auto& bridges = layer.get_list<Bridge>();
-	bridges.erase(bridge.index);
+	bridges.erase(tile.index);
 	layer.set(position, TileTag());
 
 	auto neighbors = Wire::get_neighbors(layer, position, FourDirections);
@@ -427,15 +458,15 @@ void Bridge::erase(Layer& layer, Int2 position)
 
 	for (Int2 current : neighbors)
 	{
-		TileTag tile = layer.get(current);
-		assert(tile.type == TileType::Wire);
+		TileTag neighbor = layer.get(current);
+		assert(neighbor.type == TileType::Wire);
 
-		Wire& wire = layer.get_list<Wire>()[tile.index];
+		Wire& wire = layer.get_list<Wire>()[neighbor.index];
 		assert(not wire.positions.contains(position));
 
-		if (std::find(wire_indices.begin(), wire_indices.end(), tile.index) == wire_indices.end())
+		if (std::find(wire_indices.begin(), wire_indices.end(), neighbor.index) == wire_indices.end())
 		{
-			wire_indices.push_back(tile.index);
+			wire_indices.push_back(neighbor.index);
 			bool erased = wire.bridges.erase(position);
 			assert(erased);
 		}
@@ -452,26 +483,76 @@ void Bridge::draw(DrawContext& context, Int2 position, Index index, const Layer&
 
 	auto corner0 = Float2(position);
 	Float2 corner1 = corner0 + Float2(1.0f);
-	context.emplace(false, corner0, corner1, 0xCC140FFF);
+	context.emplace(false, corner0, corner1, 0xB6343EFF);
 }
 
-void Gate::insert(Layer& layer, Int2 position)
+Gate::Gate(Gate::Type type, const TileRotation& rotation) : type(type), rotation(rotation)
 {
+	assert(type == Type::Transistor || type == Type::Inverter);
+	assert(rotation.get_next() == rotation.get_next()); //Assert rotation is valid
+}
 
+void Gate::insert(Layer& layer, Int2 position, Gate::Type type, TileRotation rotation)
+{
+	TileTag tile = layer.get(position);
+	if (tile.type == TileType::Gate) return;
+	assert(tile.type == TileType::None);
+
+	auto& gates = layer.get_list<Gate>();
+	Index gate_index = gates.emplace(type, rotation);
+	layer.set(position, TileTag(TileType::Gate, gate_index));
+
+	update(layer, position);
 }
 
 void Gate::erase(Layer& layer, Int2 position)
 {
+	TileTag tile = layer.get(position);
+	if (tile.type == TileType::None) return;
+	assert(tile.type == TileType::Gate);
 
+	auto& gates = layer.get_list<Gate>();
+	gates.erase(tile.index);
+	layer.set(position, TileTag());
 }
 
 void Gate::draw(DrawContext& context, Int2 position, Index index, const Layer& layer)
 {
-	//	const auto& gate = layer.get_list<Gate>()[index];
+	static constexpr uint32_t ColorTransistor = 0x3EAD5FFF;
+	static constexpr uint32_t ColorInverter = 0x3B49FFFF;
+	static constexpr uint32_t ColorDisabled = 0x121118FF;
+	static constexpr float DisabledSize = 0.5f;
+
+	const auto& gate = layer.get_list<Gate>()[index];
+	uint32_t color = gate.type == Type::Transistor ? ColorTransistor : ColorInverter;
 
 	auto corner0 = Float2(position);
 	Float2 corner1 = corner0 + Float2(1.0f);
-	context.emplace(false, corner0, corner1, 0x1320DBFF);
+	context.emplace(false, corner0, corner1, color);
+
+	Int2 direction = gate.rotation.get_direction();
+	Float2 origin = corner0 + Float2(0.5f);
+	Float2 center = origin + Float2(direction) * (0.5f - DisabledSize / 2.0f);
+	corner0 = center - Float2(DisabledSize / 2.0f);
+	corner1 = corner0 + Float2(DisabledSize);
+
+	context.emplace(false, corner0, corner1, 0x111118FF);
+}
+
+void Gate::update(Layer& layer, Int2 position)
+{
+	TileTag tile = layer.get(position);
+	assert(tile.type == TileType::Gate);
+	auto& gate = layer.get_list<Gate>()[tile.index];
+
+	TileRotation rotation = gate.rotation;
+
+	for (Index& wire_index : gate.wire_indices)
+	{
+		TileTag neighbor = layer.get(position + rotation.get_direction());
+		wire_index = neighbor.type == TileType::Wire ? neighbor.index : Index();
+		rotation = rotation.get_next();
+	}
 }
 
 }

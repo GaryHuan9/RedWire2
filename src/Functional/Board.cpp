@@ -140,7 +140,7 @@ void Layer::Chunk::update_vertices(DrawContext& context) const
 			TileTag tile = get(position);
 			position += chunk_position;
 
-			switch (tile.type.get_switch())
+			switch (tile.type.get_value())
 			{
 				case TileType::Wire:
 				{

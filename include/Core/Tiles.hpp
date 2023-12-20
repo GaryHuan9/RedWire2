@@ -14,22 +14,57 @@ class TileType
 public:
 	enum Value : uint8_t
 	{
-		None,
+		None = 0,
 		Wire,
 		Bridge,
 		Gate,
 		Note
 	};
 
-	constexpr TileType(Value value = Value::None) : value(value) {} // NOLINT(*-explicit-constructor)
+	constexpr TileType(Value value = Value::None) : value(value) // NOLINT(*-explicit-constructor)
+	{
+		assert(static_cast<unsigned int>(value) < 5);
+	}
 
-	[[nodiscard]] Value get_switch() const { return value; }
+	[[nodiscard]] constexpr Value get_value() const { return value; }
 
 	[[nodiscard]] const char* to_string() const;
 
-	[[nodiscard]] constexpr bool operator==(TileType other) const { return value == other.value; }
+	[[nodiscard]] constexpr bool operator==(TileType other) const { return get_value() == other.get_value(); }
 
-	[[nodiscard]] constexpr bool operator!=(TileType other) const { return value != other.value; }
+	[[nodiscard]] constexpr bool operator!=(TileType other) const { return get_value() != other.get_value(); }
+
+private:
+	Value value;
+};
+
+class TileRotation
+{
+public:
+	enum Value : uint8_t
+	{
+		East = 0,
+		West,
+		South,
+		North
+	};
+
+	constexpr TileRotation(Value value = Value::East) : value(value) // NOLINT(*-explicit-constructor)
+	{
+		assert(static_cast<unsigned int>(value) < 4);
+	}
+
+	[[nodiscard]] TileRotation get_next() const;
+
+	[[nodiscard]] Int2 get_direction() const;
+
+	[[nodiscard]] constexpr Value get_value() const { return value; }
+
+	[[nodiscard]] const char* to_string() const;
+
+	[[nodiscard]] constexpr bool operator==(TileRotation other) const { return get_value() == other.get_value(); }
+
+	[[nodiscard]] constexpr bool operator!=(TileRotation other) const { return get_value() != other.get_value(); }
 
 private:
 	Value value;
@@ -58,11 +93,6 @@ public:
 
 	static void draw(DrawContext& context, Int2 position, Index index, const Layer& layer);
 
-#ifndef NDEBUG
-	const uint32_t color;
-#endif
-
-private:
 	/**
 	 * Gets any wire neighbors of a position in certain directions.
 	 * @return The position of the neighbors.
@@ -83,6 +113,11 @@ private:
 	static std::vector<Int2> fix_neighbors_bridges(Wire& wire, Int2 position);
 
 	/**
+	 * Updates all four gates neighboring a wire at position.
+	 */
+	static void update_neighbors_gates(Layer& layer, Int2 position);
+
+	/**
 	 * Merge all wires at positions into a single wire.
 	 * @return Index of the final merged big wire.
 	 */
@@ -97,6 +132,12 @@ private:
 	 * Splits a previously connected wire into separate wires at positions.
 	 */
 	static void split_positions(Layer& layer, std::vector<Int2>& positions, Index wire_index);
+
+#ifndef NDEBUG
+	const uint32_t color;
+#endif
+
+private:
 
 	std::unordered_set<Int2> positions;
 	std::unordered_set<Int2> bridges;
@@ -123,13 +164,36 @@ private:
 class Gate
 {
 public:
-	static void insert(Layer& layer, Int2 position);
+	enum class Type : uint8_t
+	{
+		Transistor,
+		Inverter
+	};
+
+	Gate(Type type, const TileRotation& rotation);
+
+	static void insert(Layer& layer, Int2 position, Gate::Type type, TileRotation rotation);
 
 	static void erase(Layer& layer, Int2 position);
 
 	static void draw(DrawContext& context, Int2 position, Index index, const Layer& layer);
 
+	static void update(Layer& layer, Int2 position);
+
 private:
+	[[nodiscard]] Index output_index() const { return wire_indices.front(); }
+
+	[[nodiscard]] Index& output_index() { return wire_indices.front(); }
+
+	[[nodiscard]] std::span<const Index> input_indices() const { return { wire_indices.begin() + 1, wire_indices.end() }; }
+
+	[[nodiscard]] std::span<Index> input_indices() { return { wire_indices.begin() + 1, wire_indices.end() }; }
+
+	Type type;
+	TileRotation rotation;
+	std::array<Index, 4> wire_indices;
+
+	friend Debugger;
 };
 
 }

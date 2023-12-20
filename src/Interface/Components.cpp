@@ -1,12 +1,11 @@
 #include "Interface/Components.hpp"
 #include "Core/Board.hpp"
 #include "Core/Tiles.hpp"
+#include "Utility/Functions.hpp"
 
 #include "SFML/Window.hpp"
 #include "SFML/Graphics.hpp"
 #include "imgui.h"
-
-#include <sstream>
 
 namespace rw
 {
@@ -140,7 +139,7 @@ void Controller::initialize()
 
 void Controller::update(const Timer& timer)
 {
-	static constexpr std::array Tools = { "Move", "Remove", "Wire", "Bridge" };
+	static constexpr std::array Tools = { "Move", "Remove", "Wire", "Bridge", "Transistor", "Inverter" };
 
 	if (ImGui::Begin("Controller"))
 	{
@@ -160,10 +159,12 @@ void Controller::update(const Timer& timer)
 	Int2 position;
 	if (not try_get_mouse_position(position)) return;
 
-	if (sf::Mouse::isButtonPressed(sf::Mouse::Button::Right)) selected_tool = 0;
-	else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::F)) selected_tool = 1;
-	else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num1)) selected_tool = 2;
-	else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num2)) selected_tool = 3;
+	if (sf::Mouse::isButtonPressed(sf::Mouse::Right)) selected_tool = 0;
+	else if (sf::Keyboard::isKeyPressed(sf::Keyboard::F)) selected_tool = 1;
+	else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Num1)) selected_tool = 2;
+	else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Num2)) selected_tool = 3;
+	else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Num3)) selected_tool = 4;
+	else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Num4)) selected_tool = 5;
 
 	if (selected_tool != 0)
 	{
@@ -194,7 +195,8 @@ void Controller::update(const Timer& timer)
 			case 1:
 			{
 				if (tile.type == TileType::Wire) Wire::erase(*layer, position);
-				if (tile.type == TileType::Bridge) Bridge::erase(*layer, position);
+				else if (tile.type == TileType::Bridge) Bridge::erase(*layer, position);
+				else if (tile.type == TileType::Gate) Gate::erase(*layer, position);
 				break;
 			}
 			case 2:
@@ -207,6 +209,13 @@ void Controller::update(const Timer& timer)
 				if (tile.type == TileType::None) Bridge::insert(*layer, position);
 				break;
 			}
+			case 4:
+			case 5:
+			{
+				Gate::Type type = selected_tool == 4 ? Gate::Type::Transistor : Gate::Type::Inverter;
+				if (tile.type == TileType::None) Gate::insert(*layer, position, type, rotation);
+				break;
+			}
 		}
 	}
 }
@@ -215,9 +224,16 @@ void Controller::input_event(const sf::Event& event)
 {
 	Component::input_event(event);
 
-	if (event.type != sf::Event::MouseWheelScrolled) return;
-	float delta = event.mouseWheelScroll.delta / -32.0f;
-	layer_view->change_zoom(delta, mouse_percent);
+	if (event.type == sf::Event::MouseWheelScrolled)
+	{
+		float delta = event.mouseWheelScroll.delta / -32.0f;
+		layer_view->change_zoom(delta, mouse_percent);
+	}
+
+	if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::R)
+	{
+		rotation = rotation.get_next();
+	}
 }
 
 bool Controller::try_get_mouse_position(Int2& position) const
@@ -249,20 +265,13 @@ void Debugger::update(const Timer& timer)
 
 	if (Int2 position; controller->try_get_mouse_position(position))
 	{
-		auto to_string = []<class T>(const T& value)
-		{
-			std::stringstream stream;
-			stream << value;
-			return stream.str();
-		};
-
 		TileTag tile = layer.get(position);
 		ImGui::LabelText("Mouse Position", to_string(position).c_str());
-		ImGui::LabelText("Tile Type", tile.type.to_string());
+		ImGui::LabelText("Tile Type", to_string(tile.type).c_str());
 
 		if (tile.type != TileType::None)
 		{
-			ImGui::LabelText("Tile Index", std::to_string(tile.index).c_str());
+			ImGui::LabelText("Tile Index", to_string(tile.index).c_str());
 		}
 	}
 
@@ -293,6 +302,21 @@ void Debugger::update(const Timer& timer)
 			shape.setPosition(offset.x, offset.y);
 			window.draw(shape, states);
 		}
+	}
+
+	static int debug_gate = -1;
+	ImGui::InputInt("Debug Gate", &debug_gate);
+
+	const auto& gates = layer.get_list<Gate>();
+	if (debug_gate >= 0 && gates.contains(Index(debug_gate)))
+	{
+		const Gate& gate = gates[Index(debug_gate)];
+		ImGui::LabelText("Gate Type", gate.type == Gate::Type::Transistor ? "Transistor" : "Inverter");
+		ImGui::LabelText("Gate Rotation", gate.rotation.to_string());
+		ImGui::LabelText("Output Index", to_string(gate.output_index()).c_str());
+		ImGui::LabelText("Input Index [0]", to_string(gate.input_indices()[0]).c_str());
+		ImGui::LabelText("Input Index [1]", to_string(gate.input_indices()[1]).c_str());
+		ImGui::LabelText("Input Index [2]", to_string(gate.input_indices()[2]).c_str());
 	}
 
 	ImGui::End();
