@@ -1,5 +1,5 @@
-#include "Core/Board.hpp"
-#include "Core/Tiles.hpp"
+#include "Functional/Board.hpp"
+#include "Functional/Tiles.hpp"
 
 #include <SFML/Graphics.hpp>
 

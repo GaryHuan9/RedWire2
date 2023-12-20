@@ -1,6 +1,6 @@
 #include "Interface/Components.hpp"
-#include "Core/Board.hpp"
-#include "Core/Tiles.hpp"
+#include "Functional/Board.hpp"
+#include "Functional/Tiles.hpp"
 #include "Utility/Functions.hpp"
 
 #include "SFML/Window.hpp"

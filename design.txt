@@ -10,8 +10,8 @@ one we way to make supporting modules easier is by disallowing the placement of 
 or we can simply draw a box around the module and say gates do not work across boundaries.
 
 TODO:
-- add inverter and transistor
-- support connecting to gates around wires
+V add inverter and transistor
+V support connecting to gates around wires
 - begin work on wire update engine
 - support copy and pasting
 - support saving and loading files

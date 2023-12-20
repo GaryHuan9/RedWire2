@@ -1,6 +1,6 @@
 #include "main.hpp"
-#include "Core/Board.hpp"
-#include "Core/Tiles.hpp"
+#include "Functional/Board.hpp"
+#include "Functional/Tiles.hpp"
 
 #include "gtest/gtest.h"
 #include <unordered_set>

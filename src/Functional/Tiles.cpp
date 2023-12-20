@@ -1,5 +1,5 @@
-#include "Core/Tiles.hpp"
-#include "Core/Board.hpp"
+#include "Functional/Tiles.hpp"
+#include "Functional/Board.hpp"
 
 #include <random>
 #include <utility>

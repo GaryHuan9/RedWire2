@@ -3,7 +3,7 @@
 #include "main.hpp"
 #include "Application.hpp"
 #include "Utility/Types.hpp"
-#include "Core/Tiles.hpp"
+#include "Functional/Tiles.hpp"
 
 namespace rw
 {
