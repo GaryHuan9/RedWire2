@@ -90,3 +90,41 @@ TEST_F(WireBridgeTests, DoubleBridge)
 	ASSERT_EQ(wires.size(), 4);
 	ASSERT_EQ(bridges.size(), 0);
 }
+
+TEST_F(WireBridgeTests, DisconnectBridge)
+{
+	auto& wires = layer->get_list<Wire>();
+	auto& bridges = layer->get_list<Bridge>();
+
+	insert_wires(Int2(0, 0));
+	insert_wires(Int2(0, 1));
+	insert_wires(Int2(-1, -1));
+	insert_wires(Int2(1, -1));
+	insert_bridge(Int2(0, -1));
+
+	//Set up a T shape where a bridge is at the junction
+
+	ASSERT_EQ(wires.size(), 2);
+	ASSERT_EQ(bridges.size(), 1);
+
+	erase(Int2(0, 0));
+
+	//If the bridge is not correctly removed due to erasing the connecting wire, the following should cause problems:
+
+	erase(Int2(0, -1));
+	ASSERT_EQ(bridges.size(), 0);
+
+	insert_wires(Int2(0, -1));
+	insert_wires(Int2(0, 0));
+	ASSERT_EQ(wires.size(), 1);
+
+	erase(Int2(0, -1));
+	ASSERT_EQ(wires.size(), 3);
+
+	insert_bridge(Int2(0, -1));
+	ASSERT_EQ(wires.size(), 2);
+
+	insert_wires(Int2(0, -2));
+	insert_wires(Int2(1, -2));
+	ASSERT_EQ(wires.size(), 1);
+}

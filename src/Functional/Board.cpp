@@ -138,27 +138,34 @@ void Layer::Chunk::update_vertices(DrawContext& context) const
 		{
 			Int2 position(x, y);
 			TileTag tile = get(position);
-			uint32_t color = 0x050505FF;
+			position += chunk_position;
 
 			switch (tile.type.get_switch())
 			{
 				case TileType::Wire:
 				{
-					color = layer.get_list<Wire>()[tile.index].color;
+					Wire::draw(context, position, tile.index, layer);
 					break;
 				}
 				case TileType::Bridge:
 				{
-					color = 0x333333FF;
+					Bridge::draw(context, position, tile.index, layer);
 					break;
 				}
-				default: continue;
+				case TileType::Gate:
+				{
+					Gate::draw(context, position, tile.index, layer);
+					break;
+				}
+				case TileType::None: continue;
+				default:
+				{
+					Float2 corner0(position);
+					Float2 corner1 = corner0 + Float2(1.0f);
+					context.emplace(false, corner0, corner1, 0xFF00FFFF);
+					break;
+				}
 			}
-
-			auto corner0 = Float2(position + chunk_position);
-			Float2 corner1 = corner0 + Float2(1.0f);
-
-			context.emplace(tile.type == TileType::Wire, corner0, corner1, color);
 		}
 	}
 

@@ -59,7 +59,7 @@ private:
 
 	std::unordered_map<Int2, std::unique_ptr<Chunk>> chunks;
 
-	ListsType<Wire, Bridge> lists;
+	ListsType<Wire, Bridge, Gate> lists;
 };
 
 class Layer::Chunk

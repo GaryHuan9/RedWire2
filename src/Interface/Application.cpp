@@ -18,8 +18,12 @@ Application::Application()
 {
 	bool success = true;
 
-	window = std::make_unique<sf::RenderWindow>(sf::VideoMode{ 1920, 1080 }, "cubes");
-	//	window->setVerticalSyncEnabled(true);
+	sf::VideoMode video_mode(1920, 1080);
+	sf::ContextSettings settings;
+	settings.antialiasingLevel = 16;
+
+	window = std::make_unique<sf::RenderWindow>(video_mode, "RedWire2", sf::Style::Default, settings);
+	window->setVerticalSyncEnabled(true);
 	success |= ImGui::SFML::Init(*window, false);
 
 	auto& style = ImGui::GetStyle();

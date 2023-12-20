@@ -165,6 +165,19 @@ void Controller::update(const Timer& timer)
 	else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num1)) selected_tool = 2;
 	else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num2)) selected_tool = 3;
 
+	if (selected_tool != 0)
+	{
+		sf::RenderStates states = layer_view->get_render_states();
+		sf::RectangleShape cursor(sf::Vector2f(1.0f, 1.0f));
+
+		cursor.setFillColor(sf::Color::Transparent);
+		cursor.setOutlineColor(sf::Color(200, 200, 210));
+		cursor.setOutlineThickness(0.05f);
+
+		cursor.setPosition(static_cast<float>(position.x), static_cast<float>(position.y));
+		window.draw(cursor, states);
+	}
+
 	if (sf::Mouse::isButtonPressed(sf::Mouse::Button::Left))
 	{
 		TileTag tile = layer->get(position);
@@ -250,6 +263,35 @@ void Debugger::update(const Timer& timer)
 		if (tile.type != TileType::None)
 		{
 			ImGui::LabelText("Tile Index", std::to_string(tile.index).c_str());
+		}
+	}
+
+	static int debug_wire = -1;
+	ImGui::InputInt("Debug Wire", &debug_wire);
+
+	const auto& wires = layer.get_list<Wire>();
+	if (debug_wire >= 0 && wires.contains(Index(debug_wire)))
+	{
+		const Wire& wire = wires[Index(debug_wire)];
+		sf::RenderStates states = layer_view->get_render_states();
+		sf::RectangleShape shape(sf::Vector2f(0.5f, 0.5f));
+
+		shape.setFillColor(sf::Color::Green);
+
+		for (Int2 position : wire.positions)
+		{
+			Float2 offset = Float2(position) + Float2(0.5f);
+			shape.setPosition(offset.x, offset.y);
+			window.draw(shape, states);
+		}
+
+		shape.setFillColor(sf::Color::Cyan);
+
+		for (Int2 position : wire.bridges)
+		{
+			Float2 offset(position);
+			shape.setPosition(offset.x, offset.y);
+			window.draw(shape, states);
 		}
 	}
 

@@ -17,8 +17,8 @@ target_link_libraries(RedWire2 RedWire2.Core)
 
 add_custom_command(TARGET RedWire2 POST_BUILD COMMAND
         ${CMAKE_COMMAND} -E copy_directory
-        ${CMAKE_SOURCE_DIR}/ext/JetBrainsMono
-        ${CMAKE_BINARY_DIR}/ext/JetBrainsMono
+        ${CMAKE_SOURCE_DIR}/rsc
+        ${CMAKE_BINARY_DIR}/rsc
 )
 
 # Tests

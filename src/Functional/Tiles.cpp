@@ -18,6 +18,23 @@ static uint32_t get_new_color()
 	return distribution(random) | 0xFFu;
 }
 
+template<class T>
+static auto set_intersect(const std::unordered_set<T>& set0, const std::unordered_set<T>& set1)
+{
+	auto* search = &set0;
+	auto* check = &set1;
+	if (search->size() > check->size()) std::swap(search, check);
+
+	std::unordered_set<T> result;
+
+	for (const T& value : *search)
+	{
+		if (check->contains(value)) result.insert(value);
+	}
+
+	return result;
+}
+
 const char* TileType::to_string() const
 {
 	switch (get_switch())
@@ -48,7 +65,7 @@ void Wire::insert(Layer& layer, Int2 position)
 
 	//Find neighbors and merge them
 	auto& wires = layer.get_list<Wire>();
-	auto neighbors = get_neighbors(layer, position, FourDirections);
+	auto neighbors = get_neighbors_bridges(layer, position);
 	Index wire_index = merge_positions(layer, neighbors);
 	if (wire_index == Index()) wire_index = wires.emplace();
 
@@ -79,10 +96,10 @@ void Wire::erase(Layer& layer, Int2 position)
 	layer.set(position, TileTag());
 
 	assert(not wire.bridges.contains(position));
+	assert(wire.positions.contains(position));
 
 	if (wire.length() == 1)
 	{
-		assert(wire.positions.contains(position));
 		wires.erase(tile.index);
 		return;
 	}
@@ -91,22 +108,45 @@ void Wire::erase(Layer& layer, Int2 position)
 	assert(erased);
 
 	//Divide disconnected neighbors to different wires
-	std::vector<Int2> neighbors = get_neighbors(layer, position, tile.index);
+	std::vector<Int2> neighbors = fix_neighbors_bridges(wire, position);
 	if (neighbors.size() > 1) split_positions(layer, neighbors, tile.index);
 }
 
-std::vector<Int2> Wire::get_neighbors(const Layer& layer, Int2 position, std::span<const Int2> directions, bool use_bridge)
+void Wire::draw(DrawContext& context, Int2 position, Index index, const Layer& layer)
+{
+	const auto& wire = layer.get_list<Wire>()[index];
+
+	auto corner0 = Float2(position);
+	Float2 corner1 = corner0 + Float2(1.0f);
+	context.emplace(true, corner0, corner1, wire.color);
+}
+
+std::vector<Int2> Wire::get_neighbors(const Layer& layer, Int2 position, std::span<const Int2> directions)
 {
 	std::vector<Int2> neighbors;
 
-	//Finds all wires neighboring a tile
 	for (Int2 direction : directions)
 	{
 		Int2 current = position + direction;
 		TileTag tile = layer.get(current);
 
+		if (tile.type == TileType::Wire) neighbors.push_back(current);
+	}
+
+	return neighbors;
+}
+
+std::vector<Int2> Wire::get_neighbors_bridges(const Layer& layer, Int2 position)
+{
+	std::vector<Int2> neighbors;
+
+	for (Int2 direction : FourDirections)
+	{
+		Int2 current = position + direction;
+		TileTag tile = layer.get(current);
+
 		//Forward position to next tile if is a bridge
-		if (use_bridge && tile.type == TileType::Bridge)
+		if (tile.type == TileType::Bridge)
 		{
 			current += direction;
 			tile = layer.get(current);
@@ -118,17 +158,33 @@ std::vector<Int2> Wire::get_neighbors(const Layer& layer, Int2 position, std::sp
 	return neighbors;
 }
 
-std::vector<Int2> Wire::get_neighbors(const Layer& layer, Int2 position, Index wire_index)
+std::vector<Int2> Wire::fix_neighbors_bridges(Wire& wire, Int2 position)
 {
-	const Wire& wire = layer.get_list<Wire>()[wire_index];
+	assert(not wire.positions.contains(position));
+
 	std::vector<Int2> neighbors;
 
-	//Finds all positions neighboring a tile with the same wire index
 	for (Int2 direction : FourDirections)
 	{
 		Int2 current = position + direction;
-		if (wire.bridges.contains(current)) current += direction;
-		if (not wire.positions.contains(current)) continue;
+
+		if (not wire.positions.contains(current))
+		{
+			if (not wire.bridges.contains(current)) continue;
+
+			if (not wire.positions.contains(current + direction))
+			{
+				Int2 rotated = direction;
+				std::swap(rotated.x, rotated.y);
+
+				//Erase bridge from wire if all four of its direct neighbors do not exist anymore (i.e. position, current + direction, +- rotated)
+				if (not wire.positions.contains(current + rotated) && not wire.positions.contains(current - rotated)) wire.bridges.erase(current);
+				continue;
+			}
+
+			current += direction;
+		}
+
 		neighbors.push_back(current);
 	}
 
@@ -172,6 +228,8 @@ Index Wire::merge_positions(Layer& layer, const std::vector<Int2>& positions)
 		//Union the two sets
 		wire.positions.insert(old_wire.positions.begin(), old_wire.positions.end());
 		wire.bridges.insert(old_wire.bridges.begin(), old_wire.bridges.end());
+		assert(set_intersect(wire.positions, wire.bridges).empty());
+
 		wires.erase(tile.index);
 	}
 
@@ -302,6 +360,7 @@ void Wire::split_positions(Layer& layer, std::vector<Int2>& positions, Index wir
 					//If this bridge is still used by this wire in some way, we place it back to allow passing through it once again
 					if (wire.positions.contains(next + rotated) || wire.positions.contains(next - rotated)) wire.bridges.insert(next);
 
+					assert(not visited.contains(next));
 					bridges.insert(next);
 					next += direction;
 				}
@@ -318,6 +377,8 @@ void Wire::split_positions(Layer& layer, std::vector<Int2>& positions, Index wir
 
 		//Assign connected tiles to data
 		std::erase_if(positions, [&visited](Int2 current) { return visited.contains(current); });
+
+		assert(set_intersect(visited, bridges).empty());
 		std::swap(wires[new_index].positions, visited);
 		std::swap(wires[new_index].bridges, bridges);
 
@@ -338,7 +399,7 @@ void Bridge::insert(Layer& layer, Int2 position)
 
 	auto update_wires = [&layer, position](std::span<const Int2> directions)
 	{
-		auto neighbors = Wire::get_neighbors(layer, position, directions, false);
+		auto neighbors = Wire::get_neighbors(layer, position, directions);
 		Index wire_index = Wire::merge_positions(layer, neighbors);
 		if (wire_index == Index()) return;
 
@@ -361,7 +422,7 @@ void Bridge::erase(Layer& layer, Int2 position)
 	bridges.erase(bridge.index);
 	layer.set(position, TileTag());
 
-	auto neighbors = Wire::get_neighbors(layer, position, FourDirections, false);
+	auto neighbors = Wire::get_neighbors(layer, position, FourDirections);
 	std::vector<Index> wire_indices;
 
 	for (Int2 current : neighbors)
@@ -385,6 +446,15 @@ void Bridge::erase(Layer& layer, Int2 position)
 	Wire::split_positions(layer, neighbors);
 }
 
+void Bridge::draw(DrawContext& context, Int2 position, Index index, const Layer& layer)
+{
+	//	const auto& bridges = layer.get_list<Bridge>()[index];
+
+	auto corner0 = Float2(position);
+	Float2 corner1 = corner0 + Float2(1.0f);
+	context.emplace(false, corner0, corner1, 0xCC140FFF);
+}
+
 void Gate::insert(Layer& layer, Int2 position)
 {
 
@@ -393,6 +463,15 @@ void Gate::insert(Layer& layer, Int2 position)
 void Gate::erase(Layer& layer, Int2 position)
 {
 
+}
+
+void Gate::draw(DrawContext& context, Int2 position, Index index, const Layer& layer)
+{
+	//	const auto& gate = layer.get_list<Gate>()[index];
+
+	auto corner0 = Float2(position);
+	Float2 corner1 = corner0 + Float2(1.0f);
+	context.emplace(false, corner0, corner1, 0x1320DBFF);
 }
 
 }
