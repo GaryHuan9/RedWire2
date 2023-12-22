@@ -34,7 +34,7 @@ Application::Application()
 	io.ConfigWindowsMoveFromTitleBarOnly = true;
 	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
-	io.Fonts->AddFontFromFileTTF("ext/JetBrainsMono/JetBrainsMono-Bold.ttf", 16.0f);
+	io.Fonts->AddFontFromFileTTF("rsc/JetBrainsMono/JetBrainsMono-Bold.ttf", 16.0f);
 	success |= ImGui::SFML::UpdateFontTexture();
 	assert(success);
 

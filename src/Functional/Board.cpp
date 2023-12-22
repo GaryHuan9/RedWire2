@@ -1,5 +1,6 @@
 #include "Functional/Board.hpp"
 #include "Functional/Tiles.hpp"
+#include "Functional/Engine.hpp"
 
 #include <SFML/Graphics.hpp>
 
@@ -8,7 +9,8 @@ namespace rw
 
 Board::Board() = default;
 
-Layer::Layer() = default;
+Layer::Layer() : engine(std::make_unique<Engine>()) {}
+
 Layer::~Layer() = default;
 
 TileTag Layer::get(Int2 position) const
@@ -104,18 +106,18 @@ bool Layer::Chunk::set(Int2 position, TileTag tile)
 	{
 		assert(occupied_tiles > 0);
 		--occupied_tiles;
-		vertices_dirty = true;
+		mark_dirty();
 	}
 
 	if (tile.type != TileType::None)
 	{
 		++occupied_tiles;
-		vertices_dirty = true;
 		tile_indices[index] = tile.index;
+		mark_dirty();
 	}
 
 	type = tile.type;
-	return true;
+	return occupied_tiles > 0;
 }
 
 void Layer::Chunk::draw(DrawContext& context) const

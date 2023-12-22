@@ -1,5 +1,6 @@
 #include "Functional/Tiles.hpp"
 #include "Functional/Board.hpp"
+#include "Functional/Engine.hpp"
 
 #include <random>
 #include <utility>
@@ -83,6 +84,7 @@ void Wire::insert(Layer& layer, Int2 position)
 	auto& wire = wires[wire_index];
 	wire.positions.insert(position);
 	layer.set(position, TileTag(TileType::Wire, wire_index));
+	layer.get_engine().register_wire(wire_index);
 	update_neighbors_gates(layer, position);
 
 	//Add neighboring bridges to wire

@@ -138,7 +138,6 @@ public:
 #endif
 
 private:
-
 	std::unordered_set<Int2> positions;
 	std::unordered_set<Int2> bridges;
 

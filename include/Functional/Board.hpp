@@ -36,6 +36,8 @@ public:
 	template<class T>
 	RecyclingList<T>& get_list() { return std::get<get_list_index<T>()>(lists); }
 
+	[[nodiscard]] Engine& get_engine() const { return *engine; }
+
 	[[nodiscard]] TileTag get(Int2 position) const;
 
 	[[nodiscard]] bool has(Int2 position, TileType type) const;
@@ -60,6 +62,7 @@ private:
 	std::unordered_map<Int2, std::unique_ptr<Chunk>> chunks;
 
 	ListsType<Wire, Bridge, Gate> lists;
+	std::unique_ptr<Engine> engine;
 };
 
 class Layer::Chunk
@@ -70,6 +73,8 @@ public:
 	[[nodiscard]] TileTag get(Int2 position) const;
 
 	bool set(Int2 position, TileTag tile);
+
+	void mark_dirty() { vertices_dirty = true; }
 
 	void draw(DrawContext& context) const;
 

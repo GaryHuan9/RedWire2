@@ -26,6 +26,7 @@ namespace rw
 class Board;
 class Layer;
 class DrawContext;
+class Engine;
 
 class TileType;
 class TileTag;

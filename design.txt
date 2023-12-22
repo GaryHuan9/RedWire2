@@ -19,3 +19,17 @@ V support connecting to gates around wires
 - add greedy meshing (single axis)
 - add vertex buffer batching between chunks
 - add modules system
+
+module ModuleName
+(
+    wire InputWireName0;
+    wire InputWireName1;
+    wire[64] InputWiresName0;
+)
+{
+    wire ModuleWireName0;
+    wire ModuleWireName1;
+
+    and ModuleWireName0 InputWireName0 InputWireName1;
+    xnor ModuleWireName1 InputWireName0 InputWireName1;
+}
