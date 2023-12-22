@@ -6,6 +6,7 @@
 #include "SFML/Window.hpp"
 #include "SFML/Graphics.hpp"
 #include "imgui.h"
+#include "GL/glew.h"
 
 namespace rw
 {
