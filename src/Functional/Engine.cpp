@@ -35,6 +35,8 @@ void Engine::register_gate(Index index, Index output, const std::array<Index, 3>
 
 void Engine::update()
 {
+	std::copy(states.begin(), states.end(), states_next.begin());
+
 	for (size_t i = 0; i < gates_output.size(); ++i)
 	{
 		Index output = gates_output[i];
@@ -51,7 +53,7 @@ void Engine::update()
 			else result ^= value;
 		}
 
-		states_next[i] = result;
+		states_next[i] |= result;
 	}
 
 	std::swap(states, states_next);

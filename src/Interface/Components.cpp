@@ -6,7 +6,8 @@
 #include "SFML/Window.hpp"
 #include "SFML/Graphics.hpp"
 #include "imgui.h"
-#include "GL/glew.h"
+#include "Drawing.hpp"
+//#include "GL/glew.h"
 
 namespace rw
 {
@@ -127,7 +128,8 @@ void LayerView::draw_layer(sf::RenderWindow& window, const Layer& layer) const
 	sf::RenderStates states_static = states_wire;
 
 	sf::Shader shader;
-	shader.loadFromFile("rsc/Tiles/WireShader.frag", sf::Shader::Fragment);
+	shader.loadFromFile("rsc/Tiles/WireShader.vert", sf::Shader::Vertex);
+	shader.bind()
 
 	DrawContext context(window, states_wire, states_static);
 	layer.draw(context, get_min(), get_max());

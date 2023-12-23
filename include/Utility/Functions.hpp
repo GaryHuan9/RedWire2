@@ -33,4 +33,6 @@ std::string to_string(const T& value)
 	return std::to_string(value);
 }
 
+void throw_any_gl_error();
+
 }

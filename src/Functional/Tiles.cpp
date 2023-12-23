@@ -1,6 +1,7 @@
 #include "Functional/Tiles.hpp"
 #include "Functional/Board.hpp"
 #include "Functional/Engine.hpp"
+#include "Drawing.hpp"
 
 #include <random>
 #include <utility>

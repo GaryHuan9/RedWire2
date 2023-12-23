@@ -1,6 +1,7 @@
 #include "Functional/Board.hpp"
 #include "Functional/Tiles.hpp"
 #include "Functional/Engine.hpp"
+#include "Drawing.hpp"
 
 #include <SFML/Graphics.hpp>
 
@@ -173,34 +174,6 @@ void Layer::Chunk::update_vertices(DrawContext& context) const
 
 	context.batch_buffer(true, *vertices_wire);
 	context.batch_buffer(false, *vertices_static);
-}
-
-DrawContext::DrawContext(sf::RenderWindow& window, const sf::RenderStates& states_wire, const sf::RenderStates& states_static) :
-	window(window), states_wire(states_wire), states_static(states_static) {}
-
-void DrawContext::emplace(bool wire, Float2 corner0, Float2 corner1, uint32_t color)
-{
-	sf::Color sf_color(color);
-	auto& vertices = (wire ? vertices_wire : vertices_static);
-	vertices.emplace_back(sf::Vector2f(corner0.x, corner0.y), sf_color, sf::Vector2f(0.0f, 0.0f));
-	vertices.emplace_back(sf::Vector2f(corner1.x, corner0.y), sf_color, sf::Vector2f(1.0f, 0.0f));
-	vertices.emplace_back(sf::Vector2f(corner1.x, corner1.y), sf_color, sf::Vector2f(1.0f, 1.0f));
-	vertices.emplace_back(sf::Vector2f(corner0.x, corner1.y), sf_color, sf::Vector2f(0.0f, 1.0f));
-}
-
-void DrawContext::batch_buffer(bool wire, sf::VertexBuffer& buffer)
-{
-	size_t size = buffer.getVertexCount();
-	auto& vertices = (wire ? vertices_wire : vertices_static);
-	if (size != vertices.size()) buffer.create(vertices.size());
-
-	buffer.update(vertices.data());
-	vertices.clear();
-}
-
-void DrawContext::draw(bool wire, const sf::VertexBuffer& buffer)
-{
-	window.draw(buffer, wire ? states_wire : states_static);
 }
 
 }

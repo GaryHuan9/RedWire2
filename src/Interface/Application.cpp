@@ -7,6 +7,7 @@
 #include "SFML/Graphics.hpp"
 #include "imgui-SFML.h"
 #include "imgui.h"
+#include "GL/glew.h"
 
 namespace rw
 {
@@ -16,15 +17,14 @@ static void configure_colors(ImGuiStyle& style);
 
 Application::Application()
 {
-	bool success = true;
-
 	sf::VideoMode video_mode(1920, 1080);
 	sf::ContextSettings settings;
 	settings.antialiasingLevel = 16;
 
 	window = std::make_unique<sf::RenderWindow>(video_mode, "RedWire2", sf::Style::Default, settings);
 	window->setVerticalSyncEnabled(true);
-	success |= ImGui::SFML::Init(*window, false);
+
+	if (not ImGui::SFML::Init(*window, false)) throw std::runtime_error("Unable to create SFML window.");
 
 	auto& style = ImGui::GetStyle();
 	configure_spacing(style);
@@ -35,8 +35,9 @@ Application::Application()
 	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 	io.Fonts->AddFontFromFileTTF("rsc/JetBrainsMono/JetBrainsMono-Bold.ttf", 16.0f);
-	success |= ImGui::SFML::UpdateFontTexture();
-	assert(success);
+
+	if (not ImGui::SFML::UpdateFontTexture()) throw std::runtime_error("Unable update font texture.");
+	if (glewInit() != GLEW_OK) throw std::runtime_error("Unable initialize GLEW for OpenGL.");
 
 	make_component<LayerView>();
 	make_component<Controller>();

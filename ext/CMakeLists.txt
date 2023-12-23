@@ -19,5 +19,6 @@ add_subdirectory(imgui-sfml)
 target_link_libraries(RedWire2.Core ImGui-SFML::ImGui-SFML)
 target_include_directories(RedWire2.Core PRIVATE include)
 
+set(ONLY_LIBS ON)
 add_subdirectory(glew)
-target_link_libraries(RedWire2.Core libglew_shared)
+target_link_libraries(RedWire2.Core libglew_static)

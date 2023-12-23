@@ -2,6 +2,7 @@
 
 #include "main.hpp"
 #include "Utility/Types.hpp"
+#include "Drawing.hpp"
 
 #include <unordered_set>
 #include <span>
