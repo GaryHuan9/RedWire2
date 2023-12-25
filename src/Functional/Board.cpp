@@ -1,7 +1,7 @@
 #include "Functional/Board.hpp"
 #include "Functional/Tiles.hpp"
 #include "Functional/Engine.hpp"
-#include "Drawing.hpp"
+#include "Functional/Drawing.hpp"
 
 #include <SFML/Graphics.hpp>
 
@@ -64,7 +64,10 @@ void Layer::draw(DrawContext& context, Float2 min_position, Float2 max_position)
 			Int2 chunk_position = pair.first;
 			if (min_chunk.x > chunk_position.x || chunk_position.x > max_chunk.x) continue;
 			if (min_chunk.y > chunk_position.y || chunk_position.y > max_chunk.y) continue;
-			pair.second->draw(context);
+
+			Chunk& chunk = *pair.second;
+			chunk.update_draw_buffer(context);
+			chunk.draw(context);
 		}
 	}
 	else
@@ -75,7 +78,10 @@ void Layer::draw(DrawContext& context, Float2 min_position, Float2 max_position)
 			{
 				auto iterator = chunks.find(Int2(x, y));
 				if (iterator == chunks.end()) continue;
-				iterator->second->draw(context);
+
+				Chunk& chunk = *iterator->second;
+				chunk.update_draw_buffer(context);
+				chunk.draw(context);
 			}
 		}
 	}
@@ -84,9 +90,7 @@ void Layer::draw(DrawContext& context, Float2 min_position, Float2 max_position)
 Layer::Chunk::Chunk(const Layer& layer, Int2 chunk_position) :
 	layer(layer), chunk_position(chunk_position),
 	tile_types(new TileType[Size * Size]()),
-	tile_indices(new uint32_t[Size * Size]()),
-	vertices_wire(std::make_unique<sf::VertexBuffer>(sf::PrimitiveType::Quads, sf::VertexBuffer::Usage::Dynamic)),
-	vertices_static(std::make_unique<sf::VertexBuffer>(sf::PrimitiveType::Quads, sf::VertexBuffer::Usage::Dynamic)) {}
+	tile_indices(new uint32_t[Size * Size]()) {}
 
 TileTag Layer::Chunk::get(Int2 position) const
 {
@@ -123,18 +127,15 @@ bool Layer::Chunk::set(Int2 position, TileTag tile)
 
 void Layer::Chunk::draw(DrawContext& context) const
 {
-	if (vertices_dirty)
-	{
-		update_vertices(context);
-		vertices_dirty = false;
-	}
-
-	context.draw(true, *vertices_wire);
-	context.draw(false, *vertices_static);
+	context.draw(true, draw_buffer_quad);
+	context.draw(false, draw_buffer_wire);
 }
 
-void Layer::Chunk::update_vertices(DrawContext& context) const
+void Layer::Chunk::update_draw_buffer(DrawContext& context)
 {
+	if (not vertices_dirty) return;
+	vertices_dirty = false;
+
 	for (int32_t y = 0; y < Size; ++y)
 	{
 		for (int32_t x = 0; x < Size; ++x)
@@ -165,15 +166,15 @@ void Layer::Chunk::update_vertices(DrawContext& context) const
 				{
 					Float2 corner0(position);
 					Float2 corner1 = corner0 + Float2(1.0f);
-					context.emplace(false, corner0, corner1, 0xFF00FFFF);
+					context.emplace_quad(corner0, corner1, 0xFF00FFFF);
 					break;
 				}
 			}
 		}
 	}
 
-	context.batch_buffer(true, *vertices_wire);
-	context.batch_buffer(false, *vertices_static);
+	draw_buffer_quad = context.flush_buffer(true);
+	draw_buffer_wire = context.flush_buffer(false);
 }
 
 }

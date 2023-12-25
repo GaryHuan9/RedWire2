@@ -8,85 +8,143 @@
 namespace rw
 {
 
-DrawContext::DrawContext(sf::RenderWindow& window, const sf::RenderStates& states_wire, const sf::RenderStates& states_static) :
-	window(window), states_wire(states_wire), states_static(states_static) {}
-
-void DrawContext::emplace(bool wire, rw::Float2 corner0, rw::Float2 corner1, uint32_t color)
+void DrawContext::emplace_quad(Float2 corner0, Float2 corner1, uint32_t color)
 {
-	sf::Color sf_color(color);
-	auto& vertices = (wire ? vertices_wire : vertices_static);
-	vertices.emplace_back(sf::Vector2f(corner0.x, corner0.y), sf_color, sf::Vector2f(0.0f, 0.0f));
-	vertices.emplace_back(sf::Vector2f(corner1.x, corner0.y), sf_color, sf::Vector2f(1.0f, 0.0f));
-	vertices.emplace_back(sf::Vector2f(corner1.x, corner1.y), sf_color, sf::Vector2f(1.0f, 1.0f));
-	vertices.emplace_back(sf::Vector2f(corner0.x, corner1.y), sf_color, sf::Vector2f(0.0f, 1.0f));
+	color = swap_endianness(color);
+	vertices_quad.emplace_back(Float2(corner0.x, corner0.y), color);
+	vertices_quad.emplace_back(Float2(corner1.x, corner0.y), color);
+	vertices_quad.emplace_back(Float2(corner1.x, corner1.y), color);
+	vertices_quad.emplace_back(Float2(corner0.x, corner1.y), color);
 }
 
-void DrawContext::batch_buffer(bool wire, sf::VertexBuffer& buffer)
+void DrawContext::emplace_wire(Float2 corner0, Float2 corner1, uint32_t color)
 {
-	size_t size = buffer.getVertexCount();
-	auto& vertices = (wire ? vertices_wire : vertices_static);
-	if (size != vertices.size()) buffer.create(vertices.size());
-
-	buffer.update(vertices.data());
-	vertices.clear();
+	color = swap_endianness(color);
+	vertices_wire.emplace_back(Float2(corner0.x, corner0.y), color);
+	vertices_wire.emplace_back(Float2(corner1.x, corner0.y), color);
+	vertices_wire.emplace_back(Float2(corner1.x, corner1.y), color);
+	vertices_wire.emplace_back(Float2(corner0.x, corner1.y), color);
 }
 
-void DrawContext::draw(bool wire, const sf::VertexBuffer& buffer)
+DrawBuffer DrawContext::flush_buffer(bool quad)
 {
-	window.draw(buffer, wire ? states_wire : states_static);
+	auto impl = []<class T>(std::vector<T>& vertices)
+	{
+		DrawBuffer buffer(vertices.data(), vertices.size());
+		buffer.set_attributes<Float2, uint32_t>();
+
+		vertices.clear();
+		return std::move(buffer);
+	};
+
+	return quad ? impl(vertices_quad) : impl(vertices_wire);
 }
 
-DrawBuffer::DrawBuffer(void* data, size_t size, size_t count) : count(count)
+void DrawContext::draw(bool quad, const DrawBuffer& buffer) const
 {
+	sf::Shader::bind(quad ? shader_quad : shader_wire);
+	buffer.draw();
+}
+
+void DrawContext::clear()
+{
+	glBindVertexArray(0);
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	sf::Shader::bind(nullptr);
+
+	vertices_quad.clear();
+	vertices_wire.clear();
+}
+
+DrawBuffer::DrawBuffer(const void* data, size_t size, size_t count) : count(count)
+{
+	if (count == 0) return;
 	assert(size % count == 0);
-	glGenBuffers(1, &handle);
+
+	glGenVertexArrays(1, &handle_vao);
+	glBindVertexArray(handle_vao);
+	throw_any_gl_error();
+
+	glGenBuffers(1, &handle_vbo);
+	glBindBuffer(GL_ARRAY_BUFFER, handle_vbo);
 	throw_any_gl_error();
 
 	auto bytes = static_cast<GLsizeiptr>(size);
-	glBindBuffer(GL_ARRAY_BUFFER, handle);
 	glBufferData(GL_ARRAY_BUFFER, bytes, data, GL_STATIC_DRAW);
 	throw_any_gl_error();
 }
 
 DrawBuffer::~DrawBuffer()
 {
-	assert(handle != 0);
-	glDeleteBuffers(1, &handle);
-	handle = 0;
-}
+	if (count == 0) return;
+	assert(handle_vao != 0);
+	assert(handle_vbo != 0);
 
-static void set_attribute_impl(uint32_t attribute, uint32_t size, GLenum type, size_t stride, size_t offset)
-{
-	auto converted_size = static_cast<GLint>(size);
-	auto converted_stride = static_cast<GLint>(stride);
-	auto converted_offset = reinterpret_cast<void*>(offset);
-
-	glVertexAttribPointer(attribute, converted_size, type, GL_FALSE, converted_stride, converted_offset);
-	glEnableVertexAttribArray(attribute);
+	glDeleteVertexArrays(1, &handle_vao);
+	glDeleteBuffers(1, &handle_vbo);
 	throw_any_gl_error();
+
+	handle_vao = {};
+	handle_vbo = {};
 }
 
-#define SET_ATTRIBUTE(Target, Size, Type)                                                \
-template<>                                                                               \
-void DrawBuffer::set_attribute<Target>(uint32_t attribute, size_t stride, size_t offset) \
-{                                                                                        \
-    set_attribute_impl(attribute, Size, Type, stride, offset);                           \
+#define SET_ATTRIBUTE(Target, Size, Type, Integer)                                             \
+template<>                                                                                     \
+void DrawBuffer::set_attribute<Target>(uint32_t attribute, size_t stride, size_t offset) const \
+{                                                                                              \
+    set_attribute_impl(attribute, Size, Type, Integer, stride, offset);                        \
 }
 
-SET_ATTRIBUTE(float, 1, GL_FLOAT)
+SET_ATTRIBUTE(float, 1, GL_FLOAT, false)
 
-SET_ATTRIBUTE(Float2, 2, GL_FLOAT)
+SET_ATTRIBUTE(Float2, 2, GL_FLOAT, false)
 
-SET_ATTRIBUTE(int32_t, 1, GL_INT)
+SET_ATTRIBUTE(int32_t, 1, GL_INT, true)
 
-SET_ATTRIBUTE(uint32_t, 1, GL_UNSIGNED_INT)
+SET_ATTRIBUTE(uint32_t, 1, GL_UNSIGNED_INT, true)
 
 #undef SET_ATTRIBUTE
 
 void DrawBuffer::draw() const
 {
-	glBindBuffer(GL_ARRAY_BUFFER, handle);
+	if (count == 0) return;
+	assert(count % 4 == 0);
+	assert(handle_vao != 0);
+	assert(handle_vbo != 0);
+
+	glBindVertexArray(handle_vao);
 	glDrawArrays(GL_QUADS, 0, static_cast<GLsizei>(count));
+	throw_any_gl_error();
+}
+
+void swap(DrawBuffer& value, DrawBuffer& other) noexcept
+{
+	using std::swap;
+
+	swap(value.count, other.count);
+	swap(value.handle_vao, other.handle_vao);
+	swap(value.handle_vbo, other.handle_vbo);
+}
+
+void DrawBuffer::set_attribute_impl(uint32_t attribute, uint32_t size, GLenum type, bool integer, size_t stride, size_t offset) const
+{
+	if (count == 0) return;
+
+	glBindVertexArray(handle_vao);
+	glBindBuffer(GL_ARRAY_BUFFER, handle_vbo);
+	throw_any_gl_error();
+
+	auto converted_size = static_cast<GLint>(size);
+	auto converted_stride = static_cast<GLint>(stride);
+	auto converted_offset = reinterpret_cast<void*>(offset);
+
+	//@formatter:off
+	if (integer) glVertexAttribIPointer(attribute, converted_size, type, converted_stride, converted_offset);
+	else glVertexAttribPointer(attribute, converted_size, type, GL_FALSE, converted_stride, converted_offset);
+	//@formatter:on
+
+	glEnableVertexAttribArray(attribute);
+	throw_any_gl_error();
 }
 
 }

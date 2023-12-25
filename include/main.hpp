@@ -14,8 +14,8 @@ namespace sf
 
 class Event;
 class Vertex;
+class Shader;
 class RenderWindow;
-class VertexBuffer;
 class RenderStates;
 
 }
@@ -25,8 +25,9 @@ namespace rw
 
 class Board;
 class Layer;
-class DrawContext;
 class Engine;
+class DrawContext;
+class DrawBuffer;
 
 class TileType;
 class TileTag;

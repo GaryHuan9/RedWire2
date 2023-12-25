@@ -1,7 +1,8 @@
 #include "Functional/Tiles.hpp"
 #include "Functional/Board.hpp"
 #include "Functional/Engine.hpp"
-#include "Drawing.hpp"
+#include "Functional/Drawing.hpp"
+#include "Utility/Functions.hpp"
 
 #include <random>
 #include <utility>
@@ -18,23 +19,6 @@ static uint32_t get_new_color()
 	static std::default_random_engine random(42);
 	std::uniform_int_distribution<uint32_t> distribution;
 	return distribution(random) | 0xFFu;
-}
-
-template<class T>
-static auto set_intersect(const std::unordered_set<T>& set0, const std::unordered_set<T>& set1)
-{
-	auto* search = &set0;
-	auto* check = &set1;
-	if (search->size() > check->size()) std::swap(search, check);
-
-	std::unordered_set<T> result;
-
-	for (const T& value : *search)
-	{
-		if (check->contains(value)) result.insert(value);
-	}
-
-	return result;
 }
 
 const char* TileType::to_string() const
@@ -79,13 +63,17 @@ void Wire::insert(Layer& layer, Int2 position)
 	auto& wires = layer.get_list<Wire>();
 	auto neighbors = get_neighbors_bridges(layer, position);
 	Index wire_index = merge_positions(layer, neighbors);
-	if (wire_index == Index()) wire_index = wires.emplace();
+
+	if (wire_index == Index())
+	{
+		wire_index = wires.emplace();
+		layer.get_engine().register_wire(wire_index);
+	}
 
 	//Assign tile position to wire
 	auto& wire = wires[wire_index];
 	wire.positions.insert(position);
 	layer.set(position, TileTag(TileType::Wire, wire_index));
-	layer.get_engine().register_wire(wire_index);
 	update_neighbors_gates(layer, position);
 
 	//Add neighboring bridges to wire
@@ -133,7 +121,7 @@ void Wire::draw(DrawContext& context, Int2 position, Index index, const Layer& l
 
 	auto corner0 = Float2(position);
 	Float2 corner1 = corner0 + Float2(1.0f);
-	context.emplace(true, corner0, corner1, wire.color);
+	context.emplace_wire(corner0, corner1, wire.color);
 }
 
 std::vector<Int2> Wire::get_neighbors(const Layer& layer, Int2 position, std::span<const Int2> directions)
@@ -208,12 +196,11 @@ std::vector<Int2> Wire::fix_neighbors_bridges(Wire& wire, Int2 position)
 
 void Wire::update_neighbors_gates(Layer& layer, Int2 position)
 {
-	assert(layer.has(position, TileType::Wire));
-
 	for (Int2 direction : FourDirections)
 	{
 		Int2 current = position + direction;
-		if (layer.has(current, TileType::Gate)) Gate::update(layer, current);
+		if (not layer.has(current, TileType::Gate)) continue;
+		Gate::update(layer, current);
 	}
 }
 
@@ -361,6 +348,7 @@ void Wire::split_positions(Layer& layer, std::vector<Int2>& positions, Index wir
 	do
 	{
 		Index new_index = wires.emplace();
+		layer.get_engine().register_wire(new_index);
 
 		{
 			Int2 current = positions.back();
@@ -486,7 +474,7 @@ void Bridge::draw(DrawContext& context, Int2 position, Index index, const Layer&
 
 	auto corner0 = Float2(position);
 	Float2 corner1 = corner0 + Float2(1.0f);
-	context.emplace(false, corner0, corner1, 0xB6343EFF);
+	context.emplace_quad(corner0, corner1, 0xB6343EFF);
 }
 
 Gate::Gate(Gate::Type type, const TileRotation& rotation) : type(type), rotation(rotation)
@@ -531,7 +519,7 @@ void Gate::draw(DrawContext& context, Int2 position, Index index, const Layer& l
 
 	auto corner0 = Float2(position);
 	Float2 corner1 = corner0 + Float2(1.0f);
-	context.emplace(false, corner0, corner1, color);
+	context.emplace_quad(corner0, corner1, color);
 
 	Int2 direction = gate.rotation.get_direction();
 	Float2 origin = corner0 + Float2(0.5f);
@@ -539,7 +527,7 @@ void Gate::draw(DrawContext& context, Int2 position, Index index, const Layer& l
 	corner0 = center - Float2(DisabledSize / 2.0f);
 	corner1 = corner0 + Float2(DisabledSize);
 
-	context.emplace(false, corner0, corner1, 0x111118FF);
+	context.emplace_quad(corner0, corner1, 0x111118FF);
 }
 
 void Gate::update(Layer& layer, Int2 position)

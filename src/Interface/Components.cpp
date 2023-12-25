@@ -1,21 +1,27 @@
 #include "Interface/Components.hpp"
 #include "Functional/Board.hpp"
 #include "Functional/Tiles.hpp"
+#include "Functional/Drawing.hpp"
 #include "Utility/Functions.hpp"
 
 #include "SFML/Window.hpp"
 #include "SFML/Graphics.hpp"
 #include "imgui.h"
-#include "Drawing.hpp"
-//#include "GL/glew.h"
 
 namespace rw
 {
 
-LayerView::LayerView(Application& application) : Component(application)
+LayerView::LayerView(Application& application) :
+	Component(application),
+	shader_quad(std::make_unique<sf::Shader>()),
+	shader_wire(std::make_unique<sf::Shader>()),
+	draw_context(std::make_unique<DrawContext>(shader_quad.get(), shader_quad.get()))
 {
 	Float2 window_size(window.getSize());
 	set_aspect_ratio(window_size.x / window_size.y);
+
+	shader_quad->loadFromFile("rsc/Tiles/Quad.vert", "rsc/Tiles/Tile.frag");
+	//	shader_wire->loadFromFile("rsc/Tiles/Wire.vert", "rsc/Tiles/Tile.frag");
 }
 
 LayerView::~LayerView() = default;
@@ -25,8 +31,8 @@ void LayerView::update(const Timer& timer)
 	//TODO: do some kind of a fetching logic from whoever that owns the Layer
 	if (current_layer == nullptr) return;
 
-	draw_grid(window);
-	draw_layer(window, *current_layer);
+	draw_grid();
+	draw_layer(*current_layer);
 }
 
 void LayerView::input_event(const sf::Event& event)
@@ -76,7 +82,7 @@ void LayerView::get_scale_origin(float& scale, Float2& origin) const
 	origin = window_size / 2.0f - center * scale;
 }
 
-void LayerView::draw_grid(sf::RenderWindow& window) const
+void LayerView::draw_grid() const
 {
 	float scale;
 	Float2 origin;
@@ -122,17 +128,15 @@ void LayerView::draw_grid(sf::RenderWindow& window) const
 	vertices.clear();
 }
 
-void LayerView::draw_layer(sf::RenderWindow& window, const Layer& layer) const
+void LayerView::draw_layer(const Layer& layer) const
 {
-	sf::RenderStates states_wire = get_render_states();
-	sf::RenderStates states_static = states_wire;
+	Float2 scale = Float2(1.0f, -1.0f) / extend;
+	Float2 origin = -center * scale;
 
-	sf::Shader shader;
-	shader.loadFromFile("rsc/Tiles/WireShader.vert", sf::Shader::Vertex);
-	shader.bind()
-
-	DrawContext context(window, states_wire, states_static);
-	layer.draw(context, get_min(), get_max());
+	shader_quad->setUniform("scale", sf::Glsl::Vec2(scale.x, scale.y));
+	shader_quad->setUniform("origin", sf::Glsl::Vec2(origin.x, origin.y));
+	layer.draw(*draw_context, get_min(), get_max());
+	draw_context->clear();
 }
 
 Controller::Controller(Application& application) : Component(application) {}

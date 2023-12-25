@@ -44,7 +44,7 @@ public:
 	[[nodiscard]] bool handle_keyboard() const;
 
 private:
-	void process_event(const sf::Event& event);
+	void process_event(const sf::Event& event, bool& closed);
 
 	std::unique_ptr<sf::RenderWindow> window;
 	std::vector<std::unique_ptr<Component>> components;

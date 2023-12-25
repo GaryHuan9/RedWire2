@@ -1,6 +1,7 @@
 #pragma once
 
 #include "main.hpp"
+#include "Drawing.hpp"
 #include "Utility/Types.hpp"
 #include "Utility/RecyclingList.hpp"
 
@@ -74,9 +75,11 @@ public:
 
 	bool set(Int2 position, TileTag tile);
 
+	void draw(DrawContext& context) const;
+
 	void mark_dirty() { vertices_dirty = true; }
 
-	void draw(DrawContext& context) const;
+	void update_draw_buffer(DrawContext& context);
 
 	static Int2 get_chunk_position(Int2 position) { return { position.x >> Chunk::SizeLog2, position.y >> Chunk::SizeLog2 }; }
 
@@ -89,8 +92,6 @@ public:
 	static constexpr uint32_t Size = 1u << SizeLog2;
 
 private:
-	void update_vertices(DrawContext& context) const;
-
 	static uint32_t get_index(Int2 position)
 	{
 		Int2 local_position = get_local_position(position);
@@ -104,9 +105,9 @@ private:
 	std::unique_ptr<TileType[]> tile_types;
 	std::unique_ptr<uint32_t[]> tile_indices;
 
-	mutable bool vertices_dirty = false;
-	std::unique_ptr<sf::VertexBuffer> vertices_wire;
-	std::unique_ptr<sf::VertexBuffer> vertices_static;
+	bool vertices_dirty = false;
+	DrawBuffer draw_buffer_wire;
+	DrawBuffer draw_buffer_quad;
 };
 
 }

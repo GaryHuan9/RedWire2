@@ -13,7 +13,8 @@ void throw_any_gl_error()
 	{
 		error = glGetError();
 		if (error == GL_NO_ERROR) return;
-		throw std::runtime_error("An OpenGL error occurred (" + std::to_string(error) + ").");
+		std::string string_error(reinterpret_cast<const char*>(glewGetErrorString(error)));
+		throw std::runtime_error("An OpenGL error occurred: " + string_error + " (" + std::to_string(error) + ").");
 	}
 }
 

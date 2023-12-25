@@ -1,50 +1,67 @@
 #pragma once
 
 #include "main.hpp"
+#include "Utility/Types.hpp"
 
 #include <array>
 #include <tuple>
 #include <unordered_map>
 
+using GLuint = unsigned int;
+using GLenum = unsigned int;
+
 namespace rw
 {
-
-using GLuint = unsigned int;
 
 class DrawContext
 {
 public:
-	DrawContext(sf::RenderWindow& window, const sf::RenderStates& states_wire, const sf::RenderStates& states_static);
+	DrawContext(sf::Shader* shader_quad, sf::Shader* shader_wire) : shader_quad(shader_quad), shader_wire(shader_wire) {}
 
-	/**
-	 * Emplace a new quad onto the current vertices batch.
-	 */
-	void emplace(bool wire, rw::Float2 corner0, rw::Float2 corner1, uint32_t color);
+	void emplace_quad(Float2 corner0, Float2 corner1, uint32_t color);
+	void emplace_wire(Float2 corner0, Float2 corner1, uint32_t color);
 
-	/**
-	 * Flushes batched vertices on the CPU to a buffer on GPU memory.
-	 */
-	void batch_buffer(bool wire, sf::VertexBuffer& buffer);
+	[[nodiscard]] DrawBuffer flush_buffer(bool quad);
 
-	/**
-	 * Draws GPU buffer.
-	 */
-	void draw(bool wire, const sf::VertexBuffer& buffer);
+	void draw(bool quad, const DrawBuffer& buffer) const;
 
-private:
-	sf::RenderWindow& window;
-	const sf::RenderStates& states_wire;
-	const sf::RenderStates& states_static;
+	void clear();
 
-	std::vector<sf::Vertex> vertices_wire;
-	std::vector<sf::Vertex> vertices_static;
+public:
+	struct QuadVertex
+	{
+		Float2 position;
+		uint32_t color{};
+	};
+
+	struct WireVertex
+	{
+		Float2 position;
+		uint32_t color{};
+	};
+
+	std::vector<QuadVertex> vertices_quad;
+	std::vector<WireVertex> vertices_wire;
+
+	sf::Shader* shader_quad;
+	sf::Shader* shader_wire;
 };
 
 class DrawBuffer
 {
 public:
+	DrawBuffer() : DrawBuffer(nullptr, 0, 0) {}
+
 	template<class T>
-	DrawBuffer(const T* data, size_t count) : DrawBuffer(static_cast<void*>(data), count * sizeof(T), count) {}
+	DrawBuffer(const T* data, size_t count) : DrawBuffer(reinterpret_cast<const void*>(data), count * sizeof(T), count) {}
+
+	DrawBuffer(DrawBuffer&& value) noexcept : DrawBuffer() { swap(*this, value); }
+
+	DrawBuffer& operator=(DrawBuffer&& value) noexcept
+	{
+		swap(*this, value);
+		return *this;
+	}
 
 	~DrawBuffer();
 
@@ -52,10 +69,10 @@ public:
 	DrawBuffer& operator=(const DrawBuffer&) = delete;
 
 	template<class T>
-	void set_attribute(uint32_t attribute, size_t stride, size_t offset);
+	void set_attribute(uint32_t attribute, size_t stride, size_t offset) const;
 
 	template<class... Ts>
-	void set_attributes()
+	void set_attributes() const
 	{
 		size_t stride = get_total_sizeof<Ts...>();
 		set_attributes_impl<Ts...>(0, stride, 0);
@@ -63,26 +80,31 @@ public:
 
 	void draw() const;
 
+	friend void swap(DrawBuffer& value, DrawBuffer& other) noexcept;
+
 private:
-	DrawBuffer(void* data, size_t size, size_t count);
+	DrawBuffer(const void* data, size_t size, size_t count);
+
+	void set_attribute_impl(uint32_t attribute, uint32_t size, GLenum type, bool integer, size_t stride, size_t offset) const;
 
 	template<class T, class... Ts>
-	void set_attributes_impl(uint32_t attribute, size_t stride, size_t offset)
+	void set_attributes_impl(uint32_t attribute, size_t stride, size_t offset) const
 	{
 		set_attribute<T>(attribute, stride, offset);
 		if constexpr (sizeof...(Ts) == 0) return;
-		else set_attributes_impl<Ts...>(attribute, stride, offset + sizeof(T));
+		else set_attributes_impl<Ts...>(attribute + 1, stride, offset + sizeof(T));
 	}
 
 	template<class T, class... Ts>
-	size_t get_total_sizeof()
+	static size_t get_total_sizeof()
 	{
 		if constexpr (sizeof...(Ts) == 0) return sizeof(T);
-		else return sizeof(T) + get_total_sizeof<Ts...>();
+		else return sizeof(T) + get_total_sizeof < Ts...>();
 	}
 
-	GLuint handle{};
 	size_t count;
+	GLuint handle_vao{};
+	GLuint handle_vbo{};
 };
 
 } // rw

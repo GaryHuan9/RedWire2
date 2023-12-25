@@ -23,6 +23,7 @@ Application::Application()
 
 	window = std::make_unique<sf::RenderWindow>(video_mode, "RedWire2", sf::Style::Default, settings);
 	window->setVerticalSyncEnabled(true);
+	window->resetGLStates();
 
 	if (not ImGui::SFML::Init(*window, false)) throw std::runtime_error("Unable to create SFML window.");
 
@@ -62,8 +63,9 @@ void Application::run()
 	while (true)
 	{
 		sf::Event event{};
-		while (window->pollEvent(event)) process_event(event);
-		if (!window->isOpen()) break;
+		bool closed = false;
+		while (window->pollEvent(event)) process_event(event, closed);
+		if (closed) break;
 
 		sf::Time time = clock.restart();
 		timer.update(time.asMicroseconds());
@@ -88,7 +90,7 @@ bool Application::handle_keyboard() const
 	return not ImGui::GetIO().WantCaptureKeyboard && window->hasFocus();
 }
 
-void Application::process_event(const sf::Event& event)
+void Application::process_event(const sf::Event& event, bool& closed)
 {
 	ImGui::SFML::ProcessEvent(*window, event);
 
@@ -101,13 +103,14 @@ void Application::process_event(const sf::Event& event)
 	{
 		case sf::Event::Closed:
 		{
-			window->close();
+			closed = true;
 			break;
 		}
 		case sf::Event::Resized:
 		{
-			sf::Vector2f size(sf::Vector2u(event.size.width, event.size.height));
-			window->setView(sf::View(size / 2.0f, size));
+			sf::Vector2i size(sf::Vector2u(event.size.width, event.size.height));
+			window->setView(sf::View(sf::Vector2f(size / 2), sf::Vector2f(size)));
+			glViewport(0, 0, size.x, size.y);
 			distribute(event);
 			break;
 		}

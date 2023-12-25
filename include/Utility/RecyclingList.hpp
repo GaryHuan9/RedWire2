@@ -15,10 +15,7 @@ public:
 
 	~RecyclingList() { destruct(); }
 
-	RecyclingList(RecyclingList&& other) noexcept : RecyclingList()
-	{
-		swap(*this, other);
-	}
+	RecyclingList(RecyclingList&& other) noexcept : RecyclingList() { swap(*this, other); }
 
 	RecyclingList& operator=(RecyclingList&& other) noexcept
 	{

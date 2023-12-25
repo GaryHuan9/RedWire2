@@ -72,8 +72,8 @@ private:
 
 	void get_scale_origin(float& scale, Float2& origin) const;
 
-	void draw_grid(sf::RenderWindow& window) const;
-	void draw_layer(sf::RenderWindow& window, const Layer& layer) const;
+	void draw_grid() const;
+	void draw_layer(const Layer& layer) const;
 
 	Float2 center;
 	Float2 extend;
@@ -87,6 +87,9 @@ private:
 	float zoom_percent{};
 
 	mutable std::vector<sf::Vertex> vertices;
+	std::unique_ptr<sf::Shader> shader_quad;
+	std::unique_ptr<sf::Shader> shader_wire;
+	std::unique_ptr<DrawContext> draw_context;
 
 	static constexpr int32_t ZoomIncrement = 8;
 	static constexpr float ZoomLevelShift = 0.7f;
