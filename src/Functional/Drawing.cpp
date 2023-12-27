@@ -26,11 +26,12 @@ void DrawContext::emplace_wire(Float2 corner0, Float2 corner1, uint32_t color)
 	vertices_wire.emplace_back(Float2(corner0.x, corner1.y), color);
 }
 
-DrawBuffer DrawContext::flush_buffer(bool quad)
+VertexBuffer DrawContext::flush_buffer(bool quad)
 {
 	auto impl = []<class T>(std::vector<T>& vertices)
 	{
-		DrawBuffer buffer(vertices.data(), vertices.size());
+		VertexBuffer buffer;
+		buffer.update(vertices.data(), vertices.size());
 		buffer.set_attributes<Float2, uint32_t>();
 
 		vertices.clear();
@@ -40,7 +41,7 @@ DrawBuffer DrawContext::flush_buffer(bool quad)
 	return quad ? impl(vertices_quad) : impl(vertices_wire);
 }
 
-void DrawContext::draw(bool quad, const DrawBuffer& buffer) const
+void DrawContext::draw(bool quad, const VertexBuffer& buffer) const
 {
 	sf::Shader::bind(quad ? shader_quad : shader_wire);
 	buffer.draw();
@@ -50,47 +51,81 @@ void DrawContext::clear()
 {
 	glBindVertexArray(0);
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 	sf::Shader::bind(nullptr);
 
 	vertices_quad.clear();
 	vertices_wire.clear();
 }
 
-DrawBuffer::DrawBuffer(const void* data, size_t size, size_t count) : count(count)
+DataBuffer::DataBuffer() : type(GLenum()), usage(GLenum()), handle(0), size(0) {}
+
+DataBuffer::DataBuffer(GLenum type, GLenum usage) : type(type), usage(usage), handle(0), size(0)
 {
-	if (count == 0) return;
-	assert(size % count == 0);
-
-	glGenVertexArrays(1, &handle_vao);
-	glBindVertexArray(handle_vao);
-	throw_any_gl_error();
-
-	glGenBuffers(1, &handle_vbo);
-	glBindBuffer(GL_ARRAY_BUFFER, handle_vbo);
-	throw_any_gl_error();
-
-	auto bytes = static_cast<GLsizeiptr>(size);
-	glBufferData(GL_ARRAY_BUFFER, bytes, data, GL_STATIC_DRAW);
-	throw_any_gl_error();
+	assert(type != GLenum());
+	assert(usage != GLenum());
 }
 
-DrawBuffer::~DrawBuffer()
+DataBuffer::~DataBuffer()
 {
-	if (count == 0) return;
-	assert(handle_vao != 0);
-	assert(handle_vbo != 0);
-
-	glDeleteVertexArrays(1, &handle_vao);
-	glDeleteBuffers(1, &handle_vbo);
+	if (empty()) return;
+	glDeleteBuffers(1, &handle);
 	throw_any_gl_error();
+	handle = 0;
+}
 
-	handle_vao = {};
-	handle_vbo = {};
+void DataBuffer::update_impl(const void* data, size_t new_size)
+{
+	assert(type != GLenum());
+	assert(usage != GLenum());
+
+	size_t old_size = size;
+	size = new_size;
+
+	auto casted_size = static_cast<GLsizeiptr>(size);
+
+	if (size == 0)
+	{
+		if (old_size == 0)
+		{
+			assert(handle == 0);
+			return;
+		}
+
+		assert(handle != 0);
+		glDeleteBuffers(1, &handle);
+		throw_any_gl_error();
+
+		handle = 0;
+		return;
+	}
+
+	if (size == old_size)
+	{
+		assert(old_size != 0);
+		assert(handle != 0);
+
+		bind();
+		glBufferSubData(type, 0, casted_size, data);
+		throw_any_gl_error();
+		return;
+	}
+
+	if (old_size == 0)
+	{
+		assert(handle == 0);
+		glGenBuffers(1, &handle);
+		throw_any_gl_error();
+	}
+
+	bind();
+	glBufferData(type, casted_size, data, usage);
+	throw_any_gl_error();
 }
 
 #define SET_ATTRIBUTE(Target, Size, Type, Integer)                                             \
 template<>                                                                                     \
-void DrawBuffer::set_attribute<Target>(uint32_t attribute, size_t stride, size_t offset) const \
+void DataBuffer::set_attribute<Target>(uint32_t attribute, size_t stride, size_t offset) const \
 {                                                                                              \
     set_attribute_impl(attribute, Size, Type, Integer, stride, offset);                        \
 }
@@ -105,46 +140,105 @@ SET_ATTRIBUTE(uint32_t, 1, GL_UNSIGNED_INT, true)
 
 #undef SET_ATTRIBUTE
 
-void DrawBuffer::draw() const
+void DataBuffer::bind() const
 {
-	if (count == 0) return;
-	assert(count % 4 == 0);
-	assert(handle_vao != 0);
-	assert(handle_vbo != 0);
-
-	glBindVertexArray(handle_vao);
-	glDrawArrays(GL_QUADS, 0, static_cast<GLsizei>(count));
+	if (empty()) return;
+	glBindBuffer(type, handle);
 	throw_any_gl_error();
 }
 
-void swap(DrawBuffer& value, DrawBuffer& other) noexcept
+void swap(DataBuffer& value, DataBuffer& other) noexcept
 {
 	using std::swap;
 
-	swap(value.count, other.count);
-	swap(value.handle_vao, other.handle_vao);
-	swap(value.handle_vbo, other.handle_vbo);
+	swap(value.type, other.type);
+	swap(value.usage, other.usage);
+	swap(value.handle, other.handle);
+	swap(value.size, other.size);
 }
 
-void DrawBuffer::set_attribute_impl(uint32_t attribute, uint32_t size, GLenum type, bool integer, size_t stride, size_t offset) const
+void DataBuffer::set_attribute_impl(uint32_t attribute, uint32_t attribute_size, GLenum attribute_type,
+                                    bool integer, size_t stride, size_t offset) const
 {
-	if (count == 0) return;
+	if (empty()) return;
+	bind();
 
-	glBindVertexArray(handle_vao);
-	glBindBuffer(GL_ARRAY_BUFFER, handle_vbo);
-	throw_any_gl_error();
-
-	auto converted_size = static_cast<GLint>(size);
-	auto converted_stride = static_cast<GLint>(stride);
-	auto converted_offset = reinterpret_cast<void*>(offset);
+	auto casted_size = static_cast<GLint>(attribute_size);
+	auto casted_stride = static_cast<GLint>(stride);
+	auto casted_offset = reinterpret_cast<void*>(offset);
 
 	//@formatter:off
-	if (integer) glVertexAttribIPointer(attribute, converted_size, type, converted_stride, converted_offset);
-	else glVertexAttribPointer(attribute, converted_size, type, GL_FALSE, converted_stride, converted_offset);
+	if (integer) glVertexAttribIPointer(attribute, casted_size, attribute_type, casted_stride, casted_offset);
+	else glVertexAttribPointer(attribute, casted_size, attribute_type, GL_FALSE, casted_stride, casted_offset);
 	//@formatter:on
 
 	glEnableVertexAttribArray(attribute);
 	throw_any_gl_error();
+}
+
+VertexBuffer::VertexBuffer() : handle(0), count(0), data(GL_ARRAY_BUFFER, GL_STATIC_DRAW) {}
+
+VertexBuffer::~VertexBuffer()
+{
+	if (empty()) return;
+	glDeleteVertexArrays(1, &handle);
+	throw_any_gl_error();
+	handle = 0;
+}
+
+void VertexBuffer::bind() const
+{
+	if (empty()) return;
+	glBindVertexArray(handle);
+	throw_any_gl_error();
+	data.bind();
+}
+
+void VertexBuffer::draw() const
+{
+	if (empty()) return;
+	assert(count % 4 == 0);
+
+	bind();
+	glDrawArrays(GL_QUADS, 0, static_cast<GLsizei>(count));
+	throw_any_gl_error();
+}
+
+void swap(VertexBuffer& value, VertexBuffer& other) noexcept
+{
+	using std::swap;
+
+	swap(value.handle, other.handle);
+	swap(value.count, other.count);
+	swap(value.data, other.data);
+}
+
+void VertexBuffer::update_impl(size_t new_count)
+{
+	size_t old_count = count;
+	count = new_count;
+
+	if (old_count == 0)
+	{
+		assert(handle == 0);
+		if (count == 0) return;
+		glGenVertexArrays(1, &handle);
+		throw_any_gl_error();
+	}
+
+	if (count == 0)
+	{
+		assert(handle != 0);
+		assert(old_count != 0);
+
+		glDeleteVertexArrays(1, &handle);
+		throw_any_gl_error();
+		handle = 0;
+		return;
+	}
+
+	assert(handle != 0);
+	bind();
 }
 
 }

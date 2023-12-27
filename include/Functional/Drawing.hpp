@@ -21,9 +21,11 @@ public:
 	void emplace_quad(Float2 corner0, Float2 corner1, uint32_t color);
 	void emplace_wire(Float2 corner0, Float2 corner1, uint32_t color);
 
-	[[nodiscard]] DrawBuffer flush_buffer(bool quad);
+	[[nodiscard]] VertexBuffer flush_buffer(bool quad);
 
-	void draw(bool quad, const DrawBuffer& buffer) const;
+	void draw(bool quad, const VertexBuffer& buffer) const;
+
+	void update_wire_states() const;
 
 	void clear();
 
@@ -47,26 +49,31 @@ public:
 	sf::Shader* shader_wire;
 };
 
-class DrawBuffer
+class DataBuffer
 {
 public:
-	DrawBuffer() : DrawBuffer(nullptr, 0, 0) {}
+	DataBuffer();
 
-	template<class T>
-	DrawBuffer(const T* data, size_t count) : DrawBuffer(reinterpret_cast<const void*>(data), count * sizeof(T), count) {}
+	DataBuffer(GLenum type, GLenum usage);
 
-	DrawBuffer(DrawBuffer&& value) noexcept : DrawBuffer() { swap(*this, value); }
+	DataBuffer(DataBuffer&& value) noexcept : DataBuffer() { swap(*this, value); }
 
-	DrawBuffer& operator=(DrawBuffer&& value) noexcept
+	DataBuffer& operator=(DataBuffer&& value) noexcept
 	{
 		swap(*this, value);
 		return *this;
 	}
 
-	~DrawBuffer();
+	~DataBuffer();
 
-	DrawBuffer(const DrawBuffer&) = delete;
-	DrawBuffer& operator=(const DrawBuffer&) = delete;
+	DataBuffer(const DataBuffer&) = delete;
+	DataBuffer& operator=(const DataBuffer&) = delete;
+
+	template<class T>
+	void update(const T* data, size_t count)
+	{
+		update_impl(reinterpret_cast<const void*>(data), count * sizeof(T));
+	}
 
 	template<class T>
 	void set_attribute(uint32_t attribute, size_t stride, size_t offset) const;
@@ -78,21 +85,30 @@ public:
 		set_attributes_impl<Ts...>(0, stride, 0);
 	}
 
-	void draw() const;
+	void bind() const;
 
-	friend void swap(DrawBuffer& value, DrawBuffer& other) noexcept;
+	friend void swap(DataBuffer& value, DataBuffer& other) noexcept;
 
 private:
-	DrawBuffer(const void* data, size_t size, size_t count);
+	[[nodiscard]]
+	bool empty() const
+	{
+		bool result = handle == 0;
+		assert((size == 0) == result);
+		return result;
+	}
 
-	void set_attribute_impl(uint32_t attribute, uint32_t size, GLenum type, bool integer, size_t stride, size_t offset) const;
+	void update_impl(const void* data, size_t new_size);
+
+	void set_attribute_impl(uint32_t attribute, uint32_t attribute_size, GLenum attribute_type,
+	                        bool integer, size_t stride, size_t offset) const;
 
 	template<class T, class... Ts>
 	void set_attributes_impl(uint32_t attribute, size_t stride, size_t offset) const
 	{
 		set_attribute<T>(attribute, stride, offset);
 		if constexpr (sizeof...(Ts) == 0) return;
-		else set_attributes_impl<Ts...>(attribute + 1, stride, offset + sizeof(T));
+		else set_attributes_impl < Ts...>(attribute + 1, stride, offset + sizeof(T));
 	}
 
 	template<class T, class... Ts>
@@ -102,9 +118,71 @@ private:
 		else return sizeof(T) + get_total_sizeof < Ts...>();
 	}
 
+	GLenum type;
+	GLenum usage;
+	GLuint handle;
+	size_t size;
+};
+
+class VertexBuffer
+{
+public:
+	VertexBuffer();
+
+	VertexBuffer(VertexBuffer&& value) noexcept : VertexBuffer() { swap(*this, value); }
+
+	VertexBuffer& operator=(VertexBuffer&& value) noexcept
+	{
+		swap(*this, value);
+		return *this;
+	}
+
+	~VertexBuffer();
+
+	VertexBuffer(const VertexBuffer&) = delete;
+	VertexBuffer& operator=(const VertexBuffer&) = delete;
+
+	template<class T>
+	void update(const T* new_data, size_t new_count)
+	{
+		update_impl(new_count);
+		data.update(new_data, new_count);
+	}
+
+	template<class T>
+	void set_attribute(uint32_t attribute, size_t stride, size_t offset) const
+	{
+		bind();
+		data.set_attribute<T>(attribute, stride, offset);
+	}
+
+	template<class... Ts>
+	void set_attributes() const
+	{
+		bind();
+		data.set_attributes<Ts...>();
+	}
+
+	void bind() const;
+
+	void draw() const;
+
+	friend void swap(VertexBuffer& value, VertexBuffer& other) noexcept;
+
+private:
+	[[nodiscard]]
+	bool empty() const
+	{
+		bool result = handle == 0;
+		assert((count == 0) == result);
+		return result;
+	}
+
+	void update_impl(size_t new_count);
+
+	GLuint handle;
 	size_t count;
-	GLuint handle_vao{};
-	GLuint handle_vbo{};
+	DataBuffer data;
 };
 
 } // rw

@@ -127,8 +127,8 @@ bool Layer::Chunk::set(Int2 position, TileTag tile)
 
 void Layer::Chunk::draw(DrawContext& context) const
 {
-	context.draw(true, draw_buffer_quad);
-	context.draw(false, draw_buffer_wire);
+	context.draw(true, vertex_buffer_quad);
+	context.draw(false, vertex_buffer_wire);
 }
 
 void Layer::Chunk::update_draw_buffer(DrawContext& context)
@@ -173,8 +173,8 @@ void Layer::Chunk::update_draw_buffer(DrawContext& context)
 		}
 	}
 
-	draw_buffer_quad = context.flush_buffer(true);
-	draw_buffer_wire = context.flush_buffer(false);
+	vertex_buffer_quad = context.flush_buffer(true);
+	vertex_buffer_wire = context.flush_buffer(false);
 }
 
 }

@@ -106,8 +106,8 @@ private:
 	std::unique_ptr<uint32_t[]> tile_indices;
 
 	bool vertices_dirty = false;
-	DrawBuffer draw_buffer_wire;
-	DrawBuffer draw_buffer_quad;
+	VertexBuffer vertex_buffer_quad;
+	VertexBuffer vertex_buffer_wire;
 };
 
 }

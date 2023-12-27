@@ -27,7 +27,8 @@ class Board;
 class Layer;
 class Engine;
 class DrawContext;
-class DrawBuffer;
+class DataBuffer;
+class VertexBuffer;
 
 class TileType;
 class TileTag;
