@@ -117,11 +117,12 @@ void Wire::erase(Layer& layer, Int2 position)
 
 void Wire::draw(DrawContext& context, Int2 position, Index index, const Layer& layer)
 {
-	const auto& wire = layer.get_list<Wire>()[index];
-
 	auto corner0 = Float2(position);
 	Float2 corner1 = corner0 + Float2(1.0f);
-	context.emplace_wire(corner0, corner1, wire.color);
+	context.emplace_wire(corner0, corner1, index);
+
+	//	const auto& wire = layer.get_list<Wire>()[index];
+	//	context.emplace_wire(corner0, corner1, wire.color);
 }
 
 std::vector<Int2> Wire::get_neighbors(const Layer& layer, Int2 position, std::span<const Int2> directions)
@@ -544,6 +545,8 @@ void Gate::update(Layer& layer, Int2 position)
 		wire_index = neighbor.type == TileType::Wire ? neighbor.index : Index();
 		rotation = rotation.get_next();
 	}
+
+	layer.get_engine().register_gate(tile.index, gate.output_index(), gate.type == Gate::Type::Transistor, gate.input_indices());
 }
 
 }

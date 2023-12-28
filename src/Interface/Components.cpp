@@ -1,6 +1,7 @@
 #include "Interface/Components.hpp"
 #include "Functional/Board.hpp"
 #include "Functional/Tiles.hpp"
+#include "Functional/Engine.hpp"
 #include "Functional/Drawing.hpp"
 #include "Utility/Functions.hpp"
 
@@ -15,13 +16,13 @@ LayerView::LayerView(Application& application) :
 	Component(application),
 	shader_quad(std::make_unique<sf::Shader>()),
 	shader_wire(std::make_unique<sf::Shader>()),
-	draw_context(std::make_unique<DrawContext>(shader_quad.get(), shader_quad.get()))
+	draw_context(std::make_unique<DrawContext>(shader_quad.get(), shader_wire.get()))
 {
 	Float2 window_size(window.getSize());
 	set_aspect_ratio(window_size.x / window_size.y);
 
 	shader_quad->loadFromFile("rsc/Tiles/Quad.vert", "rsc/Tiles/Tile.frag");
-	//	shader_wire->loadFromFile("rsc/Tiles/Wire.vert", "rsc/Tiles/Tile.frag");
+	shader_wire->loadFromFile("rsc/Tiles/Wire.vert", "rsc/Tiles/Tile.frag");
 }
 
 LayerView::~LayerView() = default;
@@ -135,6 +136,15 @@ void LayerView::draw_layer(const Layer& layer) const
 
 	shader_quad->setUniform("scale", sf::Glsl::Vec2(scale.x, scale.y));
 	shader_quad->setUniform("origin", sf::Glsl::Vec2(origin.x, origin.y));
+
+	shader_wire->setUniform("scale", sf::Glsl::Vec2(scale.x, scale.y));
+	shader_wire->setUniform("origin", sf::Glsl::Vec2(origin.x, origin.y));
+
+	const void* states_data;
+	size_t states_size;
+	layer.get_engine().get_states(states_data, states_size);
+	draw_context->update_wire_states(states_data, states_size);
+
 	layer.draw(*draw_context, get_min(), get_max());
 	draw_context->clear();
 }
@@ -156,6 +166,8 @@ void Controller::update(const Timer& timer)
 	{
 		int* pointer = reinterpret_cast<int*>(&selected_tool);
 		ImGui::SliderInt("Tool", pointer, 0, Tools.size() - 1, Tools[selected_tool]);
+
+		if (ImGui::Button("Update")) layer->get_engine().update();
 	}
 
 	ImGui::End();

@@ -8,67 +8,13 @@
 namespace rw
 {
 
-void DrawContext::emplace_quad(Float2 corner0, Float2 corner1, uint32_t color)
-{
-	color = swap_endianness(color);
-	vertices_quad.emplace_back(Float2(corner0.x, corner0.y), color);
-	vertices_quad.emplace_back(Float2(corner1.x, corner0.y), color);
-	vertices_quad.emplace_back(Float2(corner1.x, corner1.y), color);
-	vertices_quad.emplace_back(Float2(corner0.x, corner1.y), color);
-}
-
-void DrawContext::emplace_wire(Float2 corner0, Float2 corner1, uint32_t color)
-{
-	color = swap_endianness(color);
-	vertices_wire.emplace_back(Float2(corner0.x, corner0.y), color);
-	vertices_wire.emplace_back(Float2(corner1.x, corner0.y), color);
-	vertices_wire.emplace_back(Float2(corner1.x, corner1.y), color);
-	vertices_wire.emplace_back(Float2(corner0.x, corner1.y), color);
-}
-
-VertexBuffer DrawContext::flush_buffer(bool quad)
-{
-	auto impl = []<class T>(std::vector<T>& vertices)
-	{
-		VertexBuffer buffer;
-		buffer.update(vertices.data(), vertices.size());
-		buffer.set_attributes<Float2, uint32_t>();
-
-		vertices.clear();
-		return std::move(buffer);
-	};
-
-	return quad ? impl(vertices_quad) : impl(vertices_wire);
-}
-
-void DrawContext::draw(bool quad, const VertexBuffer& buffer) const
-{
-	sf::Shader::bind(quad ? shader_quad : shader_wire);
-	buffer.draw();
-}
-
-void DrawContext::clear()
-{
-	glBindVertexArray(0);
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
-	glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
-	sf::Shader::bind(nullptr);
-
-	vertices_quad.clear();
-	vertices_wire.clear();
-}
-
 DataBuffer::DataBuffer() : type(GLenum()), usage(GLenum()), handle(0), size(0) {}
 
-DataBuffer::DataBuffer(GLenum type, GLenum usage) : type(type), usage(usage), handle(0), size(0)
-{
-	assert(type != GLenum());
-	assert(usage != GLenum());
-}
+DataBuffer::DataBuffer(GLenum type, GLenum usage) : type(type), usage(usage), handle(0), size(0) { assert(empty()); }
 
 DataBuffer::~DataBuffer()
 {
-	if (empty()) return;
+	if (not valid() || empty()) return;
 	glDeleteBuffers(1, &handle);
 	throw_any_gl_error();
 	handle = 0;
@@ -76,8 +22,7 @@ DataBuffer::~DataBuffer()
 
 void DataBuffer::update_impl(const void* data, size_t new_size)
 {
-	assert(type != GLenum());
-	assert(usage != GLenum());
+	assert(valid());
 
 	size_t old_size = size;
 	size = new_size;
@@ -147,6 +92,20 @@ void DataBuffer::bind() const
 	throw_any_gl_error();
 }
 
+void DataBuffer::bind_base(size_t index) const
+{
+	if (empty()) return;
+	glBindBufferBase(type, index, handle);
+	throw_any_gl_error();
+}
+
+void DataBuffer::unbind() const
+{
+	if (empty()) return;
+	glBindBuffer(type, 0);
+	throw_any_gl_error();
+}
+
 void swap(DataBuffer& value, DataBuffer& other) noexcept
 {
 	using std::swap;
@@ -174,6 +133,79 @@ void DataBuffer::set_attribute_impl(uint32_t attribute, uint32_t attribute_size,
 
 	glEnableVertexAttribArray(attribute);
 	throw_any_gl_error();
+}
+
+DrawContext::DrawContext(sf::Shader* shader_quad, sf::Shader* shader_wire) :
+	shader_quad(shader_quad), shader_wire(shader_wire),
+	wire_states_buffer(GL_SHADER_STORAGE_BUFFER, GL_STREAM_DRAW)
+{
+
+}
+
+void DrawContext::emplace_quad(Float2 corner0, Float2 corner1, uint32_t color)
+{
+	uint32_t value = swap_endianness(color);
+	vertices_quad.emplace_back(Float2(corner0.x, corner0.y), value);
+	vertices_quad.emplace_back(Float2(corner1.x, corner0.y), value);
+	vertices_quad.emplace_back(Float2(corner1.x, corner1.y), value);
+	vertices_quad.emplace_back(Float2(corner0.x, corner1.y), value);
+}
+
+void DrawContext::emplace_wire(Float2 corner0, Float2 corner1, Index wire_index)
+{
+	uint32_t value = wire_index;
+	vertices_wire.emplace_back(Float2(corner0.x, corner0.y), value);
+	vertices_wire.emplace_back(Float2(corner1.x, corner0.y), value);
+	vertices_wire.emplace_back(Float2(corner1.x, corner1.y), value);
+	vertices_wire.emplace_back(Float2(corner0.x, corner1.y), value);
+}
+
+VertexBuffer DrawContext::flush_buffer(bool quad)
+{
+	auto impl = []<class T>(std::vector<T>& vertices)
+	{
+		VertexBuffer buffer;
+		buffer.update(vertices.data(), vertices.size());
+		buffer.set_attributes<Float2, uint32_t>();
+
+		vertices.clear();
+		return std::move(buffer);
+	};
+
+	return quad ? impl(vertices_quad) : impl(vertices_wire);
+}
+
+void DrawContext::draw(bool quad, const VertexBuffer& buffer) const
+{
+	if (quad)
+	{
+		sf::Shader::bind(shader_quad);
+		buffer.draw();
+	}
+	else
+	{
+		sf::Shader::bind(shader_wire);
+		wire_states_buffer.bind_base(2);
+		buffer.draw();
+		wire_states_buffer.unbind();
+	}
+}
+
+void DrawContext::update_wire_states(const void* data, size_t size)
+{
+	auto casted = reinterpret_cast<const uint8_t*>(data);
+	wire_states_buffer.update<uint8_t>(casted, size);
+	wire_states_buffer.unbind();
+}
+
+void DrawContext::clear()
+{
+	glBindVertexArray(0);
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	sf::Shader::bind(nullptr);
+
+	vertices_quad.clear();
+	vertices_wire.clear();
 }
 
 VertexBuffer::VertexBuffer() : handle(0), count(0), data(GL_ARRAY_BUFFER, GL_STATIC_DRAW) {}

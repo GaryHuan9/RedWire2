@@ -13,42 +13,6 @@ using GLenum = unsigned int;
 namespace rw
 {
 
-class DrawContext
-{
-public:
-	DrawContext(sf::Shader* shader_quad, sf::Shader* shader_wire) : shader_quad(shader_quad), shader_wire(shader_wire) {}
-
-	void emplace_quad(Float2 corner0, Float2 corner1, uint32_t color);
-	void emplace_wire(Float2 corner0, Float2 corner1, uint32_t color);
-
-	[[nodiscard]] VertexBuffer flush_buffer(bool quad);
-
-	void draw(bool quad, const VertexBuffer& buffer) const;
-
-	void update_wire_states() const;
-
-	void clear();
-
-public:
-	struct QuadVertex
-	{
-		Float2 position;
-		uint32_t color{};
-	};
-
-	struct WireVertex
-	{
-		Float2 position;
-		uint32_t color{};
-	};
-
-	std::vector<QuadVertex> vertices_quad;
-	std::vector<WireVertex> vertices_wire;
-
-	sf::Shader* shader_quad;
-	sf::Shader* shader_wire;
-};
-
 class DataBuffer
 {
 public:
@@ -87,12 +51,19 @@ public:
 
 	void bind() const;
 
+	void bind_base(size_t index) const;
+
+	void unbind() const;
+
 	friend void swap(DataBuffer& value, DataBuffer& other) noexcept;
 
 private:
+	[[nodiscard]] bool valid() const { return type != GLenum() && usage != GLenum(); }
+
 	[[nodiscard]]
 	bool empty() const
 	{
+		assert(valid());
 		bool result = handle == 0;
 		assert((size == 0) == result);
 		return result;
@@ -122,6 +93,43 @@ private:
 	GLenum usage;
 	GLuint handle;
 	size_t size;
+};
+
+class DrawContext
+{
+public:
+	DrawContext(sf::Shader* shader_quad, sf::Shader* shader_wire);
+
+	void emplace_quad(Float2 corner0, Float2 corner1, uint32_t color);
+	void emplace_wire(Float2 corner0, Float2 corner1, Index wire_index);
+
+	[[nodiscard]] VertexBuffer flush_buffer(bool quad);
+
+	void draw(bool quad, const VertexBuffer& buffer) const;
+
+	void update_wire_states(const void* data, size_t size);
+
+	void clear();
+
+public:
+	struct QuadVertex
+	{
+		Float2 position;
+		uint32_t color{};
+	};
+
+	struct WireVertex
+	{
+		Float2 position;
+		uint32_t index{};
+	};
+
+	std::vector<QuadVertex> vertices_quad;
+	std::vector<WireVertex> vertices_wire;
+
+	sf::Shader* shader_quad;
+	sf::Shader* shader_wire;
+	DataBuffer wire_states_buffer;
 };
 
 class VertexBuffer

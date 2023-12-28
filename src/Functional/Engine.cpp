@@ -1,6 +1,4 @@
 #include "Functional/Engine.hpp"
-#include "Functional/Board.hpp"
-#include "Functional/Tiles.hpp"
 
 namespace rw
 {
@@ -17,7 +15,7 @@ void Engine::register_wire(Index index)
 	states[index] = 0;
 }
 
-void Engine::register_gate(Index index, Index output, const std::array<Index, 3>& inputs, bool transistor)
+void Engine::register_gate(Index index, Index output, bool transistor, const std::span<Index>& inputs)
 {
 	if (index == gates_output.size())
 	{
@@ -27,16 +25,15 @@ void Engine::register_gate(Index index, Index output, const std::array<Index, 3>
 	}
 
 	assert(index < states.size());
-
 	gates_output[index] = output;
-	gates_inputs[index] = inputs;
 	gates_transistor[index] = transistor;
+
+	assert(inputs.size() == 3);
+	std::copy(inputs.begin(), inputs.end(), gates_inputs[index].begin());
 }
 
 void Engine::update()
 {
-	std::copy(states.begin(), states.end(), states_next.begin());
-
 	for (size_t i = 0; i < gates_output.size(); ++i)
 	{
 		Index output = gates_output[i];
@@ -53,10 +50,17 @@ void Engine::update()
 			else result ^= value;
 		}
 
-		states_next[i] |= result;
+		states_next[output] |= result;
 	}
 
 	std::swap(states, states_next);
+	std::fill(states_next.begin(), states_next.end(), 0);
+}
+
+void Engine::get_states(const void*& data, size_t& size) const
+{
+	data = states.data();
+	size = states.size();
 }
 
 }
