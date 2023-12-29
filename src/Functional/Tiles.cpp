@@ -506,6 +506,7 @@ void Gate::erase(Layer& layer, Int2 position)
 	auto& gates = layer.get_list<Gate>();
 	gates.erase(tile.index);
 	layer.set(position, TileTag());
+	layer.get_engine().unregister_gate(tile.index);
 }
 
 void Gate::draw(DrawContext& context, Int2 position, Index index, const Layer& layer)

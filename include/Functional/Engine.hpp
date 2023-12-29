@@ -14,6 +14,8 @@ public:
 
 	void register_gate(Index index, Index output, bool transistor, const std::span<Index>& inputs);
 
+	void unregister_gate(Index index);
+
 	void update();
 
 	void get_states(const void*& data, size_t& size) const;

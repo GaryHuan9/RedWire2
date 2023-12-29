@@ -20,5 +20,8 @@ void main()
     uint offset = (in_index % 4) * 8;
     uint byte = (chunk >> offset) & 0xFFu;
     bool state = byte != 0;
-    vertex_color = vec4(state ? vec3(1.0f, 1.0f, 1.0f) : vec3(1.0f, 0.0f, 0.0f), 1.0f);
+
+    const vec3 ColorPowered = vec3(0.9964537f, 0.08495427f, 0.2297457f);
+    const vec3 ColorUnpowered = vec3(0.277866f, 0.0f, 0.08495427f);
+    vertex_color = vec4(state ? ColorPowered : ColorUnpowered, 1.0f);
 }

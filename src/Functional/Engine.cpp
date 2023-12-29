@@ -32,6 +32,12 @@ void Engine::register_gate(Index index, Index output, bool transistor, const std
 	std::copy(inputs.begin(), inputs.end(), gates_inputs[index].begin());
 }
 
+void Engine::unregister_gate(Index index)
+{
+	assert(index < gates_output.size());
+	gates_output[index] = Index();
+}
+
 void Engine::update()
 {
 	for (size_t i = 0; i < gates_output.size(); ++i)

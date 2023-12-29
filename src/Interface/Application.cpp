@@ -72,6 +72,8 @@ void Application::run()
 		ImGui::SFML::Update(*window, time);
 		window->clear(sf::Color::Black);
 
+		ImGui::DockSpaceOverViewport(nullptr, ImGuiDockNodeFlags_PassthruCentralNode);
+
 		for (auto& component : components) component->update(timer);
 
 		//		ImGui::ShowDemoWindow();
@@ -172,9 +174,9 @@ static void configure_colors(ImGuiStyle& style)
 {
 	constexpr float Alpha0 = 0.33f;
 	constexpr float Alpha1 = 0.61f;
-	const ImVec4 main = ImVec4(0.07450981f, 0.93333334f, 0.34117648, 1.0f);
+	const ImVec4 main = ImVec4(0.8666667f, 0.26666668f, 0.29803923f, 1.0f);
+	const ImVec4 white0 = ImVec4(0.9360392f, 0.7044314f, 0.72623533f, 1.0f);
 	const ImVec4 white1 = ImVec4(0.98039216f, 0.9843137f, 1.0f, 1.0f);
-	const ImVec4 white0 = ImVec4(0.627098f, 0.9644314f, 0.7430588, 1.0f);
 	const ImVec4 background0 = ImVec4(0.078431375f, 0.08235294f, 0.09019608, 1.0f);
 	const ImVec4 background1 = ImVec4(0.13725491f, 0.15294118f, 0.18039216, 1.0f);
 	const ImVec4 contrast = ImVec4(0.21568628f, 0.23137255f, 0.24705882, 1.0f);
