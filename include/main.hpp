@@ -17,6 +17,7 @@ class Vertex;
 class Shader;
 class RenderWindow;
 class RenderStates;
+class RectangleShape;
 
 }
 
@@ -40,8 +41,9 @@ class Gate;
 class Application;
 class Component;
 class Timer;
-class LayerView;
 class Controller;
+class LayerView;
+class Cursor;
 class Debugger;
 
 template<class T>

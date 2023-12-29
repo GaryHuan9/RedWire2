@@ -40,8 +40,9 @@ Application::Application()
 	if (not ImGui::SFML::UpdateFontTexture()) throw std::runtime_error("Unable update font texture.");
 	if (glewInit() != GLEW_OK) throw std::runtime_error("Unable initialize GLEW for OpenGL.");
 
-	make_component<LayerView>();
 	make_component<Controller>();
+	make_component<LayerView>();
+	make_component<Cursor>();
 
 #ifndef NDEBUG
 	make_component<Debugger>();

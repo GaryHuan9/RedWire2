@@ -24,7 +24,7 @@ void Engine::register_gate(Index index, Index output, bool transistor, const std
 		gates_transistor.resize(index + 1);
 	}
 
-	assert(index < states.size());
+	assert(index < gates_output.size());
 	gates_output[index] = output;
 	gates_transistor[index] = transistor;
 

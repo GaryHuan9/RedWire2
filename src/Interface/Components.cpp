@@ -12,6 +12,18 @@
 namespace rw
 {
 
+Controller::Controller(Application& application) : Component(application) {}
+
+void Controller::initialize()
+{
+	layer = std::make_unique<Layer>();
+}
+
+void Controller::update(const Timer& timer)
+{
+
+}
+
 LayerView::LayerView(Application& application) :
 	Component(application),
 	shader_quad(std::make_unique<sf::Shader>()),
@@ -27,13 +39,18 @@ LayerView::LayerView(Application& application) :
 
 LayerView::~LayerView() = default;
 
+void LayerView::initialize()
+{
+	controller = application.find_component<Controller>();
+}
+
 void LayerView::update(const Timer& timer)
 {
-	//TODO: do some kind of a fetching logic from whoever that owns the Layer
-	if (current_layer == nullptr) return;
+	Layer* layer = controller->get_layer();
+	if (layer == nullptr) return;
 
 	draw_grid();
-	draw_layer(*current_layer);
+	draw_layer(*layer);
 }
 
 void LayerView::input_event(const sf::Event& event)
@@ -149,101 +166,41 @@ void LayerView::draw_layer(const Layer& layer) const
 	draw_context->clear();
 }
 
-Controller::Controller(Application& application) : Component(application) {}
-
-void Controller::initialize()
+Cursor::Cursor(Application& application) :
+	Component(application),
+	shape_outline(std::make_unique<sf::RectangleShape>()),
+	shape_fill(std::make_unique<sf::RectangleShape>())
 {
-	layer = std::make_unique<Layer>();
-	layer_view = application.find_component<LayerView>();
-	layer_view->set_current_layer(layer.get());
+	sf::Color color(230, 225, 240);
+
+	shape_outline->setFillColor(sf::Color::Transparent);
+	shape_outline->setOutlineThickness(0.03f);
+	shape_outline->setOutlineColor(color);
+	shape_fill->setFillColor(color);
 }
 
-void Controller::update(const Timer& timer)
+void Cursor::initialize()
 {
-	static constexpr std::array Tools = { "Move", "Remove", "Wire", "Bridge", "Transistor", "Inverter" };
+	controller = application.find_component<Controller>();
+	layer_view = application.find_component<LayerView>();
+}
 
-	if (ImGui::Begin("Controller"))
-	{
-		int* pointer = reinterpret_cast<int*>(&selected_tool);
-		ImGui::SliderInt("Tool", pointer, 0, Tools.size() - 1, Tools[selected_tool]);
+void Cursor::update(const Timer& timer)
+{
+	Float2 mouse(sf::Mouse::getPosition(window));
+	Float2 old_mouse_percent = mouse_percent;
+	mouse_percent = Float2(mouse) / Float2(window.getSize());
+	mouse_delta = mouse_percent - old_mouse_percent;
 
-		if (ImGui::Button("Update")) layer->get_engine().update();
-	}
+	Layer* layer = controller->get_layer();
 
+	if (ImGui::Begin("Cursor") && layer != nullptr) update_interface();
 	ImGui::End();
 
-	{
-		Float2 mouse(sf::Mouse::getPosition(window));
-		Float2 old_mouse_percent = mouse_percent;
-		mouse_percent = Float2(mouse) / Float2(window.getSize());
-		mouse_delta = mouse_percent - old_mouse_percent;
-	}
-
-	Int2 position;
-	if (not try_get_mouse_position(position)) return;
-
-	if (sf::Mouse::isButtonPressed(sf::Mouse::Right)) selected_tool = 0;
-	else if (sf::Keyboard::isKeyPressed(sf::Keyboard::F)) selected_tool = 1;
-	else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Num1)) selected_tool = 2;
-	else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Num2)) selected_tool = 3;
-	else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Num3)) selected_tool = 4;
-	else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Num4)) selected_tool = 5;
-
-	if (selected_tool != 0)
-	{
-		sf::RenderStates states = layer_view->get_render_states();
-		sf::RectangleShape cursor(sf::Vector2f(1.0f, 1.0f));
-
-		cursor.setFillColor(sf::Color::Transparent);
-		cursor.setOutlineColor(sf::Color(200, 200, 210));
-		cursor.setOutlineThickness(0.05f);
-
-		cursor.setPosition(static_cast<float>(position.x), static_cast<float>(position.y));
-		window.draw(cursor, states);
-	}
-
-	if (sf::Mouse::isButtonPressed(sf::Mouse::Button::Left))
-	{
-		TileTag tile = layer->get(position);
-
-		switch (selected_tool)
-		{
-			case 0:
-			{
-				Float2 old_mouse_percent = mouse_percent - mouse_delta;
-				Float2 old_point = layer_view->get_point(old_mouse_percent);
-				layer_view->set_point(mouse_percent, old_point);
-				break;
-			}
-			case 1:
-			{
-				if (tile.type == TileType::Wire) Wire::erase(*layer, position);
-				else if (tile.type == TileType::Bridge) Bridge::erase(*layer, position);
-				else if (tile.type == TileType::Gate) Gate::erase(*layer, position);
-				break;
-			}
-			case 2:
-			{
-				if (tile.type == TileType::None) Wire::insert(*layer, position);
-				break;
-			}
-			case 3:
-			{
-				if (tile.type == TileType::None) Bridge::insert(*layer, position);
-				break;
-			}
-			case 4:
-			case 5:
-			{
-				Gate::Type type = selected_tool == 4 ? Gate::Type::Transistor : Gate::Type::Inverter;
-				if (tile.type == TileType::None) Gate::insert(*layer, position, type, rotation);
-				break;
-			}
-		}
-	}
+	if (Int2 position; layer_view != nullptr && try_get_mouse_position(position)) execute(position);
 }
 
-void Controller::input_event(const sf::Event& event)
+void Cursor::input_event(const sf::Event& event)
 {
 	Component::input_event(event);
 
@@ -253,26 +210,214 @@ void Controller::input_event(const sf::Event& event)
 		layer_view->change_zoom(delta, mouse_percent);
 	}
 
-	if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::R)
-	{
-		rotation = rotation.get_next();
-	}
+	if (event.type == sf::Event::KeyPressed || event.type == sf::Event::MouseButtonPressed) update_input_event(event);
 }
 
-bool Controller::try_get_mouse_position(Int2& position) const
+bool Cursor::try_get_mouse_position(Int2& position) const
 {
 	if (not application.handle_mouse()) return false;
 	position = Float2::floor(layer_view->get_point(mouse_percent));
 	return true;
 }
 
-Debugger::Debugger(Application& application) : Component(application) {}
-
-void Debugger::initialize()
+void Cursor::update_interface()
 {
-	layer_view = application.find_component<LayerView>();
-	controller = application.find_component<Controller>();
+	{
+		Int2 position;
+		bool no_position = not try_get_mouse_position(position);
+		if (no_position) ImGui::LabelText("Mouse Position", "Not Available");
+		else ImGui::LabelText("Mouse Position", to_string(position).c_str());
+	}
+
+	int tool = static_cast<int>(current_tool);
+	ImGui::Combo("Tools", &tool, ToolNames.data(), ToolNames.size());
+	current_tool = static_cast<ToolType>(tool);
+
+	switch (current_tool)
+	{
+		case ToolType::WirePlacement:
+		{
+			break;
+		}
+		case ToolType::PortPlacement:
+		{
+			int port = static_cast<int>(current_port);
+			ImGui::SliderInt("Port", &port, 0, PortNames.size() - 1, PortNames[port]);
+			current_port = static_cast<PortType>(port);
+
+			int rotation = current_rotation.get_value();
+			ImGui::SliderInt("Rotation", &rotation, 0, 3, current_rotation.to_string());
+			current_rotation = TileRotation(static_cast<TileRotation::Value>(rotation));
+			break;
+		}
+		case ToolType::TileRemoval:
+		{
+			break;
+		}
+		default: break;
+	}
 }
+
+void Cursor::update_input_event(const sf::Event& event)
+{
+	if (event.type == sf::Event::KeyPressed)
+	{
+		const auto& key = event.key;
+
+		if (key.code == sf::Keyboard::E) current_tool = ToolType::WirePlacement;
+
+		if (key.code == sf::Keyboard::R && current_tool == ToolType::PortPlacement && current_port != PortType::Bridge)
+		{
+			current_rotation = current_rotation.get_next();
+		}
+
+		if (sf::Keyboard::Num1 <= key.code && key.code <= sf::Keyboard::Num3)
+		{
+			current_tool = ToolType::PortPlacement;
+
+			if (key.code == sf::Keyboard::Num1) current_port = PortType::Transistor;
+			else if (key.code == sf::Keyboard::Num2) current_port = PortType::Inverter;
+			else if (key.code == sf::Keyboard::Num3) current_port = PortType::Bridge;
+		}
+	}
+	else
+	{
+		assert(event.type == sf::Event::MouseButtonPressed);
+		const auto& mouse = event.mouseButton;
+
+		if (mouse.button == sf::Mouse::Right) current_tool = ToolType::Mouse;
+	}
+}
+
+void Cursor::execute(Int2 position)
+{
+	bool button = sf::Mouse::isButtonPressed(sf::Mouse::Left);
+	if (not button) drag_type = DragType::None;
+
+	if (current_tool == ToolType::Mouse)
+	{
+		if (button)
+		{
+			Float2 old_mouse_percent = mouse_percent - mouse_delta;
+			Float2 old_point = layer_view->get_point(old_mouse_percent);
+			layer_view->set_point(mouse_percent, old_point);
+		}
+
+		return;
+	}
+
+	if (button) execute_drag(position);
+	Int2 draw_position = position;
+
+	sf::RenderStates render_states = layer_view->get_render_states();
+
+	if (current_tool == ToolType::WirePlacement)
+	{
+		if (button) draw_position = place_wire(position);
+	}
+	else
+	{
+		if (button) draw_position = place_port(position);
+
+		if (current_port != PortType::Bridge)
+		{
+			constexpr float Extend = 0.15f;
+			constexpr float Offset = 0.5f - Extend;
+
+			Float2 origin = Float2(draw_position) + Float2(0.5f);
+			Int2 direction = current_rotation.get_direction();
+			Float2 center = origin + Float2(direction) * Offset;
+			center -= Float2(Extend, Extend);
+
+			shape_fill->setPosition(center.x, center.y);
+			shape_fill->setSize({ Extend * 2.0f, Extend * 2.0f });
+			window.draw(*shape_fill, render_states);
+		}
+	}
+
+	{
+		Float2 center(draw_position);
+		shape_outline->setPosition(center.x, center.y);
+		shape_outline->setSize({ 1.0f, 1.0f });
+		window.draw(*shape_outline, render_states);
+	}
+}
+
+void Cursor::execute_drag(Int2 position)
+{
+	if (drag_type == DragType::None)
+	{
+		drag_type = DragType::Origin;
+		drag_origin = position;
+	}
+	else if (drag_type == DragType::Origin && position != drag_origin)
+	{
+		Int2 delta = position - drag_origin;
+		delta = delta.max(-delta); //Absolute value
+		drag_type = delta.x > delta.y ? DragType::Horizontal : DragType::Vertical;
+	}
+}
+
+Int2 Cursor::place_wire(Int2 position)
+{
+	assert(drag_type != DragType::None);
+	Layer& layer = *controller->get_layer();
+
+	if (drag_type == DragType::Origin)
+	{
+		if (layer.has(drag_origin, TileType::None)) Wire::insert(layer, drag_origin);
+		return drag_origin;
+	}
+
+	assert(drag_type == DragType::Horizontal || drag_type == DragType::Vertical);
+
+	Float2 old_mouse_percent = mouse_percent - mouse_delta;
+	Float2 old_point = layer_view->get_point(old_mouse_percent);
+	Int2 old_position = Float2::floor(old_point);
+
+	auto drag = drag_type == DragType::Horizontal ?
+	            std::make_pair(old_position.x, position.x) :
+	            std::make_pair(old_position.y, position.y);
+
+	if (drag.first > drag.second) std::swap(drag.first, drag.second);
+
+	for (int32_t i = drag.first; i <= drag.second; ++i)
+	{
+		Int2 current(drag_origin.x, i);
+		if (drag_type == DragType::Horizontal) current = Int2(i, drag_origin.y);
+		if (layer.has(current, TileType::None)) Wire::insert(layer, current);
+	}
+
+	return drag_type == DragType::Horizontal ? Int2(position.x, drag_origin.y) : Int2(drag_origin.x, position.y);
+}
+
+Int2 Cursor::place_port(Int2 position)
+{
+	assert(drag_type != DragType::None);
+	if (position != drag_origin) return drag_origin;
+	Layer& layer = *controller->get_layer();
+
+	{
+		TileType type = layer.get(position).type;
+		if (type == TileType::Wire) Wire::erase(layer, position);
+		else if (type != TileType::None) return position;
+	}
+
+	if (current_port == PortType::Bridge)
+	{
+		Bridge::insert(layer, position);
+	}
+	else
+	{
+		auto type = Gate::Type::Transistor;
+		if (current_port == PortType::Inverter) type = Gate::Type::Inverter;
+		Gate::insert(layer, position, type, current_rotation);
+	}
+
+	return position;
+}
+
+Debugger::Debugger(Application& application) : Component(application) {}
 
 void Debugger::update(const Timer& timer)
 {
@@ -282,14 +427,20 @@ void Debugger::update(const Timer& timer)
 		return;
 	}
 
-	if (controller == nullptr || layer_view == nullptr) return;
+	auto* controller = application.find_component<Controller>();
+	auto* layer_view = application.find_component<LayerView>();
+	auto* cursor = application.find_component<Cursor>();
+
+	if (controller == nullptr) return;
+	if (layer_view == nullptr) return;
+	if (cursor == nullptr) return;
+
 	if (controller->get_layer() == nullptr) return;
 	Layer& layer = *controller->get_layer();
 
-	if (Int2 position; controller->try_get_mouse_position(position))
+	if (Int2 position; cursor->try_get_mouse_position(position))
 	{
 		TileTag tile = layer.get(position);
-		ImGui::LabelText("Mouse Position", to_string(position).c_str());
 		ImGui::LabelText("Tile Type", to_string(tile.type).c_str());
 
 		if (tile.type != TileType::None)

@@ -26,7 +26,7 @@ bool Layer::has(Int2 position, TileType type) const
 {
 	Int2 chunk_position = Chunk::get_chunk_position(position);
 	auto iterator = chunks.find(chunk_position);
-	if (iterator == chunks.end()) return false;
+	if (iterator == chunks.end()) return type == TileType::None;
 	return iterator->second->get(position).type == type;
 }
 
