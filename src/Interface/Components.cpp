@@ -19,10 +19,7 @@ void Controller::initialize()
 	layer = std::make_unique<Layer>();
 }
 
-void Controller::update(const Timer& timer)
-{
-
-}
+void Controller::update(const Timer& timer) {}
 
 LayerView::LayerView(Application& application) :
 	Component(application),
@@ -49,6 +46,7 @@ void LayerView::update(const Timer& timer)
 	Layer* layer = controller->get_layer();
 	if (layer == nullptr) return;
 
+	if (dirty) update_grid();
 	draw_grid();
 	draw_layer(*layer);
 }
@@ -80,6 +78,13 @@ sf::RenderStates LayerView::get_render_states() const
 	return states;
 }
 
+void LayerView::get_scale_origin(float& scale, Float2& origin) const
+{
+	auto window_size = Float2(window.getSize());
+	scale = window_size.x / 2.0f / extend.x; //This factor should be the same on both axes, using X here
+	origin = window_size / 2.0f - center * scale;
+}
+
 void LayerView::update_zoom()
 {
 	float shifted_zoom = zoom - ZoomLevelShift;
@@ -93,14 +98,7 @@ void LayerView::update_zoom()
 	extend = Float2(zoom_scale * aspect_ratio, zoom_scale);
 }
 
-void LayerView::get_scale_origin(float& scale, Float2& origin) const
-{
-	auto window_size = Float2(window.getSize());
-	scale = window_size.x / 2.0f / extend.x; //This factor should be the same on both axes, using X here
-	origin = window_size / 2.0f - center * scale;
-}
-
-void LayerView::draw_grid() const
+void LayerView::update_grid()
 {
 	float scale;
 	Float2 origin;
@@ -109,6 +107,8 @@ void LayerView::draw_grid() const
 	auto window_size = Float2(window.getSize());
 	Float2 min = get_min();
 	Float2 max = get_max();
+
+	vertices.clear();
 
 	auto drawer = [&](int32_t gap, float percent)
 	{
@@ -142,8 +142,12 @@ void LayerView::draw_grid() const
 	}
 	else drawer(zoom_gap, 1.0f);
 
+	dirty = false;
+}
+
+void LayerView::draw_grid() const
+{
 	window.draw(vertices.data(), vertices.size(), sf::PrimitiveType::Lines);
-	vertices.clear();
 }
 
 void LayerView::draw_layer(const Layer& layer) const
@@ -222,6 +226,9 @@ bool Cursor::try_get_mouse_position(Int2& position) const
 
 void Cursor::update_interface()
 {
+	static constexpr std::array ToolNames = { "Mouse", "Wire Placement", "Port Placement", "Tile Removal" };
+	static constexpr std::array PortNames = { "Transistor", "Inverter", "Bridge" };
+
 	{
 		Int2 position;
 		bool no_position = not try_get_mouse_position(position);
@@ -229,11 +236,11 @@ void Cursor::update_interface()
 		else ImGui::LabelText("Mouse Position", to_string(position).c_str());
 	}
 
-	int tool = static_cast<int>(current_tool);
+	int tool = static_cast<int>(selected_tool);
 	ImGui::Combo("Tools", &tool, ToolNames.data(), ToolNames.size());
-	current_tool = static_cast<ToolType>(tool);
+	selected_tool = static_cast<ToolType>(tool);
 
-	switch (current_tool)
+	switch (selected_tool)
 	{
 		case ToolType::WirePlacement:
 		{
@@ -241,13 +248,13 @@ void Cursor::update_interface()
 		}
 		case ToolType::PortPlacement:
 		{
-			int port = static_cast<int>(current_port);
+			int port = static_cast<int>(selected_port);
 			ImGui::SliderInt("Port", &port, 0, PortNames.size() - 1, PortNames[port]);
-			current_port = static_cast<PortType>(port);
+			selected_port = static_cast<PortType>(port);
 
-			int rotation = current_rotation.get_value();
-			ImGui::SliderInt("Rotation", &rotation, 0, 3, current_rotation.to_string());
-			current_rotation = TileRotation(static_cast<TileRotation::Value>(rotation));
+			int rotation = selected_rotation.get_value();
+			ImGui::SliderInt("Rotation", &rotation, 0, 3, selected_rotation.to_string());
+			selected_rotation = TileRotation(static_cast<TileRotation::Value>(rotation));
 			break;
 		}
 		case ToolType::TileRemoval:
@@ -264,20 +271,20 @@ void Cursor::update_input_event(const sf::Event& event)
 	{
 		const auto& key = event.key;
 
-		if (key.code == sf::Keyboard::E) current_tool = ToolType::WirePlacement;
+		if (key.code == sf::Keyboard::E) selected_tool = ToolType::WirePlacement;
 
-		if (key.code == sf::Keyboard::R && current_tool == ToolType::PortPlacement && current_port != PortType::Bridge)
+		if (key.code == sf::Keyboard::R && selected_tool == ToolType::PortPlacement && selected_port != PortType::Bridge)
 		{
-			current_rotation = current_rotation.get_next();
+			selected_rotation = selected_rotation.get_next();
 		}
 
 		if (sf::Keyboard::Num1 <= key.code && key.code <= sf::Keyboard::Num3)
 		{
-			current_tool = ToolType::PortPlacement;
+			selected_tool = ToolType::PortPlacement;
 
-			if (key.code == sf::Keyboard::Num1) current_port = PortType::Transistor;
-			else if (key.code == sf::Keyboard::Num2) current_port = PortType::Inverter;
-			else if (key.code == sf::Keyboard::Num3) current_port = PortType::Bridge;
+			if (key.code == sf::Keyboard::Num1) selected_port = PortType::Transistor;
+			else if (key.code == sf::Keyboard::Num2) selected_port = PortType::Inverter;
+			else if (key.code == sf::Keyboard::Num3) selected_port = PortType::Bridge;
 		}
 	}
 	else
@@ -285,7 +292,7 @@ void Cursor::update_input_event(const sf::Event& event)
 		assert(event.type == sf::Event::MouseButtonPressed);
 		const auto& mouse = event.mouseButton;
 
-		if (mouse.button == sf::Mouse::Right) current_tool = ToolType::Mouse;
+		if (mouse.button == sf::Mouse::Right) selected_tool = ToolType::Mouse;
 	}
 }
 
@@ -294,7 +301,7 @@ void Cursor::execute(Int2 position)
 	bool button = sf::Mouse::isButtonPressed(sf::Mouse::Left);
 	if (not button) drag_type = DragType::None;
 
-	if (current_tool == ToolType::Mouse)
+	if (selected_tool == ToolType::Mouse)
 	{
 		if (button)
 		{
@@ -311,7 +318,7 @@ void Cursor::execute(Int2 position)
 
 	sf::RenderStates render_states = layer_view->get_render_states();
 
-	if (current_tool == ToolType::WirePlacement)
+	if (selected_tool == ToolType::WirePlacement)
 	{
 		if (button) draw_position = place_wire(position);
 	}
@@ -319,13 +326,13 @@ void Cursor::execute(Int2 position)
 	{
 		if (button) draw_position = place_port(position);
 
-		if (current_port != PortType::Bridge)
+		if (selected_port != PortType::Bridge)
 		{
 			constexpr float Extend = 0.15f;
 			constexpr float Offset = 0.5f - Extend;
 
 			Float2 origin = Float2(draw_position) + Float2(0.5f);
-			Int2 direction = current_rotation.get_direction();
+			Int2 direction = selected_rotation.get_direction();
 			Float2 center = origin + Float2(direction) * Offset;
 			center -= Float2(Extend, Extend);
 
@@ -403,15 +410,15 @@ Int2 Cursor::place_port(Int2 position)
 		else if (type != TileType::None) return position;
 	}
 
-	if (current_port == PortType::Bridge)
+	if (selected_port == PortType::Bridge)
 	{
 		Bridge::insert(layer, position);
 	}
 	else
 	{
 		auto type = Gate::Type::Transistor;
-		if (current_port == PortType::Inverter) type = Gate::Type::Inverter;
-		Gate::insert(layer, position, type, current_rotation);
+		if (selected_port == PortType::Inverter) type = Gate::Type::Inverter;
+		Gate::insert(layer, position, type, selected_rotation);
 	}
 
 	return position;
@@ -494,6 +501,217 @@ void Debugger::update(const Timer& timer)
 	}
 
 	ImGui::End();
+}
+
+Updater::Updater(Application& application) : Component(application) {}
+
+void Updater::initialize()
+{
+	controller = application.find_component<Controller>();
+}
+
+void Updater::update(const Timer& timer)
+{
+	Layer* layer = controller->get_layer();
+
+	if (ImGui::Begin("Updater") && layer != nullptr) update_interface();
+	ImGui::End();
+
+	if (layer == nullptr) return;
+
+	float delta_time = Timer::as_float(timer.frame_time());
+	update(delta_time, layer->get_engine());
+
+	last_display_time += delta_time;
+	if (last_display_time >= 1.0f) update_display();
+}
+
+void Updater::update_interface()
+{
+	ImGui::SeparatorText("Control");
+
+	{
+		static constexpr std::array Names = { "Per Second", "Per Frame", "Manual", "Maximum" };
+		int type = static_cast<int>(selected_type);
+		ImGui::Combo("Type", &type, Names.data(), Names.size());
+
+		Type old_type = selected_type;
+		selected_type = static_cast<Type>(type);
+
+		if (selected_type != old_type)
+		{
+			remain_count = 0;
+			dropped_count = 0;
+			per_second_error = 0.0f;
+			executed = {};
+			update_display();
+		}
+	}
+
+	{
+		static constexpr uint32_t TimeBudgetMin = 1;
+		static constexpr uint32_t TimeBudgetMax = 100;
+		auto budget = std::chrono::duration_cast<std::chrono::milliseconds>(time_budget).count();
+		ImGui::DragScalar("Time Budget", ImGuiDataType_U32, &budget, 1.0f, &TimeBudgetMin, &TimeBudgetMax, "%u ms");
+		time_budget = as_duration(budget);
+	}
+
+	if (selected_type != Type::Maximum)
+	{
+		ImGui::DragScalar("Target Count", ImGuiDataType_U32, &selected_count);
+	}
+
+	bool paused = selected_pause;
+	ImGui::BeginDisabled(paused);
+	if (ImGui::Button("Pause")) pause();
+	ImGui::EndDisabled();
+
+	ImGui::SameLine();
+	ImGui::BeginDisabled(not paused);
+	if (ImGui::Button("Resume")) resume();
+	ImGui::EndDisabled();
+
+	if (selected_type == Type::Manual)
+	{
+		ImGui::SameLine();
+		ImGui::BeginDisabled(remain_count > 0);
+
+		if (ImGui::Button("Update"))
+		{
+			remain_count = selected_count;
+			executed = {};
+			update_display();
+		}
+
+		ImGui::EndDisabled();
+	}
+
+	ImGui::SeparatorText("Statistics");
+
+	{
+		const char* display = display_updates_per_second.c_str();
+		if (display_updates_per_second.empty()) display = "0";
+		ImGui::LabelText("Achieved Updates Per Second", display);
+	}
+
+	if (not display_dropped_update_count.empty())
+	{
+		ImGui::PushStyleColor(ImGuiCol_Text, 0xFF0000FF);
+		ImGui::LabelText("Dropped Update Count", display_dropped_update_count.c_str());
+		ImGui::PopStyleColor();
+	}
+
+	if (selected_type == Type::Manual && remain_count + executed.count > 0)
+	{
+		auto total = static_cast<float>(remain_count + executed.count);
+		float progress = static_cast<float>(executed.count) / total;
+
+		ImGui::ProgressBar(progress, ImVec2(0.0f, 0.0f));
+		ImGui::SameLine(0.0f, ImGui::GetStyle().ItemInnerSpacing.x);
+		ImGui::TextUnformatted("Manual Update Progress");
+	}
+}
+
+void Updater::update_display()
+{
+	last_display_time = 0.0f;
+	display_updates_per_second.clear();
+	display_dropped_update_count.clear();
+
+	auto to_string = [](uint64_t value) { return std::to_string(value); };
+
+	if (executed.count > 0)
+	{
+		auto seconds = std::chrono::duration<float>(executed.duration);
+		float ratio = static_cast<float>(executed.count) / seconds.count();
+		display_updates_per_second = to_string(static_cast<uint64_t>(ratio));
+
+		if (selected_type != Type::Manual) executed = {};
+	}
+
+	if (dropped_count > 0)
+	{
+		display_dropped_update_count = to_string(dropped_count);
+		dropped_count = 0;
+	}
+}
+
+void Updater::update(float delta_time, Engine& engine)
+{
+	if (selected_pause) return;
+
+	switch (selected_type)
+	{
+		case Type::PerSecond:
+		{
+			float count = delta_time * static_cast<float>(selected_count);
+			auto new_count = static_cast<uint64_t>(count);
+
+			if (per_second_error >= 1.0f)
+			{
+				per_second_error -= 1.0f;
+				++new_count;
+			}
+
+			remain_count = execute(engine, remain_count + new_count);
+			per_second_error += count - static_cast<float>(new_count);
+
+			if (remain_count > selected_count)
+			{
+				dropped_count += remain_count - selected_count;
+				remain_count = selected_count;
+			}
+
+			break;
+		}
+		case Type::PerFrame:
+		{
+			dropped_count += execute(engine, selected_count);
+			break;
+		}
+		case Type::Manual:
+		{
+			uint64_t old_count = remain_count;
+			remain_count = execute(engine, remain_count);
+			if (remain_count == 0 && old_count != 0) update_display();
+
+			break;
+		}
+		case Type::Maximum:
+		{
+			execute(engine, std::numeric_limits<uint64_t>::max());
+			break;
+		}
+	}
+}
+
+uint32_t Updater::execute(Engine& engine, uint64_t count)
+{
+	if (count == 0) return 0;
+
+	Duration budget = time_budget;
+	ExecutePair total;
+
+	while (true)
+	{
+		auto attempt_budget = budget < as_duration(1) ? budget : budget / 2;
+		uint64_t attempt = attempt_budget / last_execute_rate;
+		attempt = std::clamp(attempt, uint64_t(1), count);
+
+		auto start = Clock::now();
+		for (uint64_t i = 0; i < attempt; ++i) engine.update();
+
+		Duration elapsed = Clock::now() - start;
+		total += ExecutePair(elapsed, attempt);
+		count -= attempt;
+
+		if (count == 0 || elapsed >= budget) break;
+		last_execute_rate = total.duration / total.count;
+		budget -= elapsed;
+	}
+
+	executed += total;
+	return count;
 }
 
 }

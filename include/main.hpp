@@ -44,6 +44,7 @@ class Timer;
 class Controller;
 class LayerView;
 class Cursor;
+class Updater;
 class Debugger;
 
 template<class T>

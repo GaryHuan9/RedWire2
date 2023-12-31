@@ -43,6 +43,7 @@ Application::Application()
 	make_component<Controller>();
 	make_component<LayerView>();
 	make_component<Cursor>();
+	make_component<Updater>();
 
 #ifndef NDEBUG
 	make_component<Debugger>();
