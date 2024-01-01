@@ -16,7 +16,7 @@ public:
 	explicit Controller(Application& application);
 
 	void initialize() override;
-	void update(const Timer& timer) override;
+	void update() override;
 
 	[[nodiscard]] Layer* get_layer() const { return layer.get(); }
 
@@ -31,12 +31,14 @@ public:
 	~LayerView() override;
 
 	void initialize() override;
-	void update(const Timer& timer) override;
+	void update() override;
 	void input_event(const sf::Event& event) override;
 
 	[[nodiscard]] Float2 get_min() const { return center - extend; }
 
 	[[nodiscard]] Float2 get_max() const { return center + extend; }
+
+	[[nodiscard]] float get_aspect_ratio() const { return aspect_ratio; }
 
 	[[nodiscard]] Float2 get_point(Float2 percent) const;
 
@@ -118,7 +120,7 @@ public:
 	explicit Cursor(Application& application);
 
 	void initialize() override;
-	void update(const Timer& timer) override;
+	void update() override;
 	void input_event(const sf::Event& event) override;
 
 	bool try_get_mouse_position(Int2& position) const;
@@ -150,7 +152,8 @@ private:
 	void update_interface();
 	void update_input_event(const sf::Event& event);
 
-	void execute(Int2 position);
+	void execute_keyboard();
+	void execute_mouse(Int2 position);
 	void execute_drag(Int2 position);
 	Int2 place_wire(Int2 position);
 	Int2 place_port(Int2 position);
@@ -159,10 +162,12 @@ private:
 	LayerView* layer_view{};
 
 	Float2 mouse_percent;
-	Float2 mouse_delta;
+	Float2 last_mouse_point;
 
+	float selected_pan_sensitivity = 0.5f;
 	ToolType selected_tool = ToolType::Mouse;
 	PortType selected_port = PortType::Transistor;
+	bool selected_auto_bridge = false;
 	TileRotation selected_rotation;
 
 	DragType drag_type = DragType::None;
@@ -178,7 +183,8 @@ public:
 	explicit TickControl(Application& application);
 
 	void initialize() override;
-	void update(const Timer& timer) override;
+	void update() override;
+	void input_event(const sf::Event& event) override;
 
 	void pause()
 	{
@@ -226,6 +232,13 @@ private:
 
 	uint32_t execute(Engine& engine, uint64_t count);
 
+	void begin_manual()
+	{
+		remain_count = selected_count;
+		executed = {};
+		update_display();
+	}
+
 	static constexpr Duration as_duration(uint32_t milliseconds)
 	{
 		auto result = std::chrono::milliseconds(milliseconds);
@@ -235,7 +248,7 @@ private:
 	Controller* controller{};
 
 	Type selected_type = Type::PerSecond;
-	uint64_t selected_count = 10;
+	uint64_t selected_count = 32;
 	bool selected_pause = false;
 
 	float last_display_time = 0.0f;
@@ -258,7 +271,7 @@ public:
 
 	void initialize() override {}
 
-	void update(const Timer& timer) override;
+	void update() override;
 };
 
 }

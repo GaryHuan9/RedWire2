@@ -19,7 +19,7 @@ void Controller::initialize()
 	layer = std::make_unique<Layer>();
 }
 
-void Controller::update(const Timer& timer) {}
+void Controller::update() {}
 
 LayerView::LayerView(Application& application) :
 	Component(application),
@@ -41,7 +41,7 @@ void LayerView::initialize()
 	controller = application.find_component<Controller>();
 }
 
-void LayerView::update(const Timer& timer)
+void LayerView::update()
 {
 	Layer* layer = controller->get_layer();
 	if (layer == nullptr) return;
@@ -189,19 +189,28 @@ void Cursor::initialize()
 	layer_view = application.find_component<LayerView>();
 }
 
-void Cursor::update(const Timer& timer)
+void Cursor::update()
 {
-	Float2 mouse(sf::Mouse::getPosition(window));
-	Float2 old_mouse_percent = mouse_percent;
-	mouse_percent = Float2(mouse) / Float2(window.getSize());
-	mouse_delta = mouse_percent - old_mouse_percent;
-
 	Layer* layer = controller->get_layer();
+	Float2 mouse(sf::Mouse::getPosition(window));
+	mouse_percent = mouse / Float2(window.getSize());
 
-	if (ImGui::Begin("Cursor") && layer != nullptr) update_interface();
-	ImGui::End();
+	if (layer == nullptr)
+	{
+		if (imgui_begin("Cursor")) ImGui::End();
+		return;
+	}
 
-	if (Int2 position; layer_view != nullptr && try_get_mouse_position(position)) execute(position);
+	if (imgui_begin("Cursor"))
+	{
+		update_interface();
+		ImGui::End();
+	}
+
+	if (application.handle_keyboard()) execute_keyboard();
+	if (Int2 position; try_get_mouse_position(position)) execute_mouse(position);
+
+	last_mouse_point = layer_view->get_point(mouse_percent);
 }
 
 void Cursor::input_event(const sf::Event& event)
@@ -236,14 +245,24 @@ void Cursor::update_interface()
 		else ImGui::LabelText("Mouse Position", to_string(position).c_str());
 	}
 
+	ImGui::DragFloat("Pan Sensitivity", &selected_pan_sensitivity, 0.1f, 0.0f, 1.0f);
+	imgui_tooltip("How fast (in horizontal screen percentage) the viewport moves when [WASD] keys are pressed");
+
 	int tool = static_cast<int>(selected_tool);
-	ImGui::Combo("Tools", &tool, ToolNames.data(), ToolNames.size());
+	ImGui::Combo("Tool", &tool, ToolNames.data(), ToolNames.size());
 	selected_tool = static_cast<ToolType>(tool);
+
+	imgui_tooltip(
+		"Currently selected cursor tool. Can also be switched with button shortcuts: Mouse = [RMB], Wire = [E], "
+		"Transistor = [Num1], Inverter = [Num2], Bridge = [Num3], Removal = [F], Copy = [C], Paste = [V], Cut = [X]"
+	);
 
 	switch (selected_tool)
 	{
 		case ToolType::WirePlacement:
 		{
+			ImGui::Checkbox("Auto Bridge Placement", &selected_auto_bridge);
+			imgui_tooltip("Whether to automatically place bridges at wire junctions (i.e. tiles with more than two wire neighbors)");
 			break;
 		}
 		case ToolType::PortPlacement:
@@ -252,13 +271,23 @@ void Cursor::update_interface()
 			ImGui::SliderInt("Port", &port, 0, PortNames.size() - 1, PortNames[port]);
 			selected_port = static_cast<PortType>(port);
 
+			imgui_tooltip(
+				"Currently selected port to place. Can also be switched with button shortcuts: "
+				"Transistor = [Num1], Inverter = [Num2], Bridge = [Num3]"
+			);
+
+			if (selected_port == PortType::Bridge) break;
+
 			int rotation = selected_rotation.get_value();
 			ImGui::SliderInt("Rotation", &rotation, 0, 3, selected_rotation.to_string());
 			selected_rotation = TileRotation(static_cast<TileRotation::Value>(rotation));
+			imgui_tooltip("Rotation of the new port placed. Use [R] to quickly switch to the next rotation.");
+
 			break;
 		}
 		case ToolType::TileRemoval:
 		{
+			//TODO: tile removal
 			break;
 		}
 		default: break;
@@ -270,21 +299,22 @@ void Cursor::update_input_event(const sf::Event& event)
 	if (event.type == sf::Event::KeyPressed)
 	{
 		const auto& key = event.key;
+		const auto& code = key.code;
 
-		if (key.code == sf::Keyboard::E) selected_tool = ToolType::WirePlacement;
+		if (code == sf::Keyboard::E) selected_tool = ToolType::WirePlacement;
 
-		if (key.code == sf::Keyboard::R && selected_tool == ToolType::PortPlacement && selected_port != PortType::Bridge)
+		if (code == sf::Keyboard::R && selected_tool == ToolType::PortPlacement && selected_port != PortType::Bridge)
 		{
 			selected_rotation = selected_rotation.get_next();
 		}
 
-		if (sf::Keyboard::Num1 <= key.code && key.code <= sf::Keyboard::Num3)
+		if (sf::Keyboard::Num1 <= code && code <= sf::Keyboard::Num3)
 		{
 			selected_tool = ToolType::PortPlacement;
 
-			if (key.code == sf::Keyboard::Num1) selected_port = PortType::Transistor;
-			else if (key.code == sf::Keyboard::Num2) selected_port = PortType::Inverter;
-			else if (key.code == sf::Keyboard::Num3) selected_port = PortType::Bridge;
+			if (code == sf::Keyboard::Num1) selected_port = PortType::Transistor;
+			else if (code == sf::Keyboard::Num2) selected_port = PortType::Inverter;
+			else selected_port = PortType::Bridge;
 		}
 	}
 	else
@@ -296,20 +326,33 @@ void Cursor::update_input_event(const sf::Event& event)
 	}
 }
 
-void Cursor::execute(Int2 position)
+void Cursor::execute_keyboard()
+{
+	Int2 view_input;
+	if (sf::Keyboard::isKeyPressed(sf::Keyboard::W)) view_input += Int2(0, 1);
+	if (sf::Keyboard::isKeyPressed(sf::Keyboard::S)) view_input += Int2(0, -1);
+	if (sf::Keyboard::isKeyPressed(sf::Keyboard::A)) view_input += Int2(1, 0);
+	if (sf::Keyboard::isKeyPressed(sf::Keyboard::D)) view_input += Int2(-1, 0);
+
+	if (view_input == Int2(0)) return;
+	float delta_time = Timer::as_float(application.get_timer().frame_time());
+	float speed = delta_time * selected_pan_sensitivity;
+	Float2 delta = view_input.normalized() * speed;
+
+	//Move based on relative screen percentage
+	Float2 reference = layer_view->get_point(Float2(0.0f));
+	delta.y *= layer_view->get_aspect_ratio();
+	layer_view->set_point(delta, reference);
+}
+
+void Cursor::execute_mouse(Int2 position)
 {
 	bool button = sf::Mouse::isButtonPressed(sf::Mouse::Left);
 	if (not button) drag_type = DragType::None;
 
 	if (selected_tool == ToolType::Mouse)
 	{
-		if (button)
-		{
-			Float2 old_mouse_percent = mouse_percent - mouse_delta;
-			Float2 old_point = layer_view->get_point(old_mouse_percent);
-			layer_view->set_point(mouse_percent, old_point);
-		}
-
+		if (button) layer_view->set_point(mouse_percent, last_mouse_point);
 		return;
 	}
 
@@ -376,13 +419,12 @@ Int2 Cursor::place_wire(Int2 position)
 		return drag_origin;
 	}
 
-	assert(drag_type == DragType::Horizontal || drag_type == DragType::Vertical);
+	bool horizontal = drag_type == DragType::Horizontal;
+	assert(horizontal || drag_type == DragType::Vertical);
 
-	Float2 old_mouse_percent = mouse_percent - mouse_delta;
-	Float2 old_point = layer_view->get_point(old_mouse_percent);
-	Int2 old_position = Float2::floor(old_point);
-
-	auto drag = drag_type == DragType::Horizontal ?
+	Int2 other_axis = horizontal ? Int2(0, 1) : Int2(1, 0);
+	Int2 old_position = Float2::floor(last_mouse_point);
+	auto drag = horizontal ?
 	            std::make_pair(old_position.x, position.x) :
 	            std::make_pair(old_position.y, position.y);
 
@@ -390,12 +432,27 @@ Int2 Cursor::place_wire(Int2 position)
 
 	for (int32_t i = drag.first; i <= drag.second; ++i)
 	{
-		Int2 current(drag_origin.x, i);
-		if (drag_type == DragType::Horizontal) current = Int2(i, drag_origin.y);
-		if (layer.has(current, TileType::None)) Wire::insert(layer, current);
+		Int2 current = horizontal ? Int2(i, drag_origin.y) : Int2(drag_origin.x, i);
+		TileType type = layer.get(current).type;
+
+		if (selected_auto_bridge)
+		{
+			if (type != TileType::None && type != TileType::Wire) continue;
+			bool bridge = layer.has(current + other_axis, TileType::Wire) ||
+			              layer.has(current - other_axis, TileType::Wire);
+
+			if (bridge)
+			{
+				if (type == TileType::Wire) Wire::erase(layer, current);
+				Bridge::insert(layer, current);
+				continue;
+			}
+		}
+
+		if (type == TileType::None) Wire::insert(layer, current);
 	}
 
-	return drag_type == DragType::Horizontal ? Int2(position.x, drag_origin.y) : Int2(drag_origin.x, position.y);
+	return horizontal ? Int2(position.x, drag_origin.y) : Int2(drag_origin.x, position.y);
 }
 
 Int2 Cursor::place_port(Int2 position)
@@ -426,13 +483,9 @@ Int2 Cursor::place_port(Int2 position)
 
 Debugger::Debugger(Application& application) : Component(application) {}
 
-void Debugger::update(const Timer& timer)
+void Debugger::update()
 {
-	if (not ImGui::Begin("Debugger"))
-	{
-		ImGui::End();
-		return;
-	}
+	if (not imgui_begin("Debugger")) return;
 
 	auto* controller = application.find_component<Controller>();
 	auto* layer_view = application.find_component<LayerView>();
@@ -510,20 +563,30 @@ void TickControl::initialize()
 	controller = application.find_component<Controller>();
 }
 
-void TickControl::update(const Timer& timer)
+void TickControl::update()
 {
 	Layer* layer = controller->get_layer();
 
-	if (ImGui::Begin("Ticks") && layer != nullptr) update_interface();
-	ImGui::End();
+	if (imgui_begin("Ticks"))
+	{
+		if (layer != nullptr) update_interface();
+		ImGui::End();
+	}
 
 	if (layer == nullptr) return;
 
-	float delta_time = Timer::as_float(timer.frame_time());
+	float delta_time = Timer::as_float(application.get_timer().frame_time());
 	update(delta_time, layer->get_engine());
 
 	if (not selected_pause) last_display_time += delta_time;
 	if (last_display_time >= 1.0f) update_display();
+}
+
+void TickControl::input_event(const sf::Event& event)
+{
+	Component::input_event(event);
+	if (event.type != sf::Event::KeyPressed || event.key.code != sf::Keyboard::Space) return;
+	if (selected_type == Type::Manual && remain_count == 0) begin_manual();
 }
 
 void TickControl::update_interface()
@@ -532,13 +595,17 @@ void TickControl::update_interface()
 
 	{
 		static constexpr std::array Names = { "Per Second", "Per Frame", "Manual", "Maximum" };
-		int type = static_cast<int>(selected_type);
-		ImGui::Combo("Trigger Type", &type, Names.data(), Names.size());
+		int old_type = static_cast<int>(selected_type);
+		ImGui::Combo("Trigger Type", &old_type, Names.data(), Names.size());
+		selected_type = static_cast<Type>(old_type);
 
-		Type old_type = selected_type;
-		selected_type = static_cast<Type>(type);
+		imgui_tooltip(
+			"How update ticks are triggered. Per Second = ticks are triggered consistently across every second, "
+			"Per Frame = ticks are triggered on every frame, Manual = ticks are triggered based on user input, "
+			"Maximum = as many ticks as possible are triggered continuously before responsiveness is degraded"
+		);
 
-		if (selected_type != old_type)
+		if (selected_type != static_cast<Type>(old_type))
 		{
 			remain_count = 0;
 			dropped_count = 0;
@@ -554,9 +621,14 @@ void TickControl::update_interface()
 		uint32_t budget = std::chrono::duration_cast<std::chrono::milliseconds>(time_budget).count();
 		ImGui::DragScalar("Time Budget", ImGuiDataType_U32, &budget, 1.0f, &TimeBudgetMin, &TimeBudgetMax, "%u ms");
 		time_budget = as_duration(std::clamp(budget, TimeBudgetMin, TimeBudgetMax));
+		imgui_tooltip("The time (in milliseconds) budgeted each frame for ticks; this may drastically affect responsiveness");
 	}
 
-	if (selected_type != Type::Maximum) ImGui::DragScalar("Target Count", ImGuiDataType_U32, &selected_count);
+	if (selected_type != Type::Maximum)
+	{
+		ImGui::DragScalar("Target Count", ImGuiDataType_U32, &selected_count);
+		imgui_tooltip("The target (desired) number of ticks to trigger for");
+	}
 
 	bool paused = selected_pause;
 	ImGui::BeginDisabled(paused);
@@ -573,12 +645,8 @@ void TickControl::update_interface()
 		ImGui::SameLine();
 		ImGui::BeginDisabled(remain_count > 0);
 
-		if (ImGui::Button("Begin"))
-		{
-			remain_count = selected_count;
-			executed = {};
-			update_display();
-		}
+		if (ImGui::Button("Begin")) begin_manual();
+		imgui_tooltip("Manually trigger a target number of ticks. Can also activate with the [Space] button");
 
 		ImGui::EndDisabled();
 	}
@@ -597,6 +665,7 @@ void TickControl::update_interface()
 		const char* display = display_ticks_per_second.c_str();
 		if (display_ticks_per_second.empty()) display = "0";
 		ImGui::LabelText("Achieved TPS", display);
+		imgui_tooltip("Currently achieved number of ticks per second");
 	}
 
 	if (not display_dropped_ticks.empty())
@@ -604,6 +673,11 @@ void TickControl::update_interface()
 		ImGui::PushStyleColor(ImGuiCol_Text, 0xFF0000FF);
 		ImGui::LabelText("Dropped Ticks", display_dropped_ticks.c_str());
 		ImGui::PopStyleColor();
+
+		imgui_tooltip(
+			"Number of ticks targeted but unable to be achieved. This should hopefully be zero "
+			"or otherwise Target Count is too high for this hardware and RedWire2 version."
+		);
 	}
 
 	if (selected_type == Type::Manual && remain_count + executed.count > 0)
@@ -614,6 +688,8 @@ void TickControl::update_interface()
 		ImGui::ProgressBar(progress, ImVec2(0.0f, 0.0f));
 		ImGui::SameLine(0.0f, ImGui::GetStyle().ItemInnerSpacing.x);
 		ImGui::TextUnformatted("Tick Progress");
+
+		imgui_tooltip("Completion progress of the manually triggered ticks");
 	}
 }
 

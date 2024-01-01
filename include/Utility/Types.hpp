@@ -10,6 +10,7 @@ class Vector2
 {
 private:
 	using V = Vector2;
+	using F = std::conditional_t<sizeof(T) <= sizeof(float), float, double>;
 
 public:
 	constexpr Vector2() : x{}, y{} {}
@@ -23,6 +24,23 @@ public:
 
 	template<class U>
 	constexpr explicit Vector2(U value) : Vector2(value.x, value.y) {}
+
+	constexpr T product() const { return x * y; }
+
+	constexpr T sum() const { return x + y; }
+
+	constexpr T dot(V value) const { return x * value.x + y * value.y; }
+
+	constexpr T squared_magnitude() const { return dot(*this); }
+
+	constexpr F magnitude() const { return std::sqrt(static_cast<F>(squared_magnitude())); }
+
+	constexpr Vector2<F> normalized() const
+	{
+		T length = squared_magnitude();
+		if (length == T()) return {};
+		return Vector2<F>(*this) * (1.0f / std::sqrt(static_cast<F>(length)));
+	}
 
 	constexpr V min(V value) const { return V(std::min(x, value.x), std::min(y, value.y)); }
 

@@ -17,6 +17,8 @@ public:
 
 	void run();
 
+	[[nodiscard]] sf::RenderWindow* get_window() const { return window.get(); }
+
 	template<class T>
 	[[nodiscard]] T* find_component() const
 	{
@@ -24,6 +26,11 @@ public:
 		auto iterator = std::ranges::find_if(components, predicate);
 		return iterator == components.end() ? nullptr : static_cast<T*>(iterator->get());
 	}
+
+	[[nodiscard]] const Timer& get_timer() const { return *timer; }
+
+	[[nodiscard]] bool handle_mouse() const;
+	[[nodiscard]] bool handle_keyboard() const;
 
 	template<class T, class... Arguments>
 	T* make_component(Arguments&& ... arguments)
@@ -38,16 +45,12 @@ public:
 		return pointer;
 	}
 
-	[[nodiscard]] sf::RenderWindow* get_window() const { return window.get(); }
-
-	[[nodiscard]] bool handle_mouse() const;
-	[[nodiscard]] bool handle_keyboard() const;
-
 private:
 	void process_event(const sf::Event& event, bool& closed);
 
 	std::unique_ptr<sf::RenderWindow> window;
 	std::vector<std::unique_ptr<Component>> components;
+	std::unique_ptr<Timer> timer;
 };
 
 class Component
@@ -59,7 +62,7 @@ public:
 
 	virtual void initialize() = 0;
 
-	virtual void update(const Timer& timer) = 0;
+	virtual void update() = 0;
 
 	virtual void input_event(const sf::Event& event) {}
 

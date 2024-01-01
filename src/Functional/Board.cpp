@@ -3,7 +3,7 @@
 #include "Functional/Engine.hpp"
 #include "Functional/Drawing.hpp"
 
-#include <SFML/Graphics.hpp>
+#include "SFML/Graphics.hpp"
 
 namespace rw
 {

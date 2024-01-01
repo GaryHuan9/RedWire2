@@ -27,8 +27,9 @@ Application::Application()
 
 	if (not ImGui::SFML::Init(*window, false)) throw std::runtime_error("Unable to create SFML window.");
 
-	auto& io = ImGui::GetIO();;
-	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+	timer = std::make_unique<Timer>();
+
+	auto& io = ImGui::GetIO();
 	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 	io.ConfigWindowsMoveFromTitleBarOnly = true;
 	io.IniFilename = "rsc/imgui.ini";
@@ -59,7 +60,6 @@ Application::~Application()
 void Application::run()
 {
 	sf::Clock clock;
-	Timer timer;
 
 	for (auto& component : components) component->initialize();
 
@@ -71,13 +71,13 @@ void Application::run()
 		if (closed) break;
 
 		sf::Time time = clock.restart();
-		timer.update(time.asMicroseconds());
+		timer->update(time.asMicroseconds());
 		ImGui::SFML::Update(*window, time);
 		window->clear(sf::Color::Black);
 
 		ImGui::DockSpaceOverViewport(nullptr, ImGuiDockNodeFlags_PassthruCentralNode);
 
-		for (auto& component : components) component->update(timer);
+		for (auto& component : components) component->update();
 
 		//		ImGui::ShowDemoWindow();
 		ImGui::SFML::Render(*window);

@@ -62,4 +62,8 @@ constexpr T swap_endianness(T value)
 
 void throw_any_gl_error();
 
+bool imgui_begin(const char* label);
+
+bool imgui_tooltip(const char* text);
+
 }

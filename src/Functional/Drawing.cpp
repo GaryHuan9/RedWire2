@@ -2,8 +2,8 @@
 #include "Utility/Functions.hpp"
 #include "Utility/Types.hpp"
 
-#include <SFML/Graphics.hpp>
-#include <GL/glew.h>
+#include "SFML/Graphics.hpp"
+#include "GL/glew.h"
 
 namespace rw
 {
