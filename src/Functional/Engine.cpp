@@ -38,29 +38,32 @@ void Engine::unregister_gate(Index index)
 	gates_output[index] = Index();
 }
 
-void Engine::update()
+void Engine::tick(uint32_t count)
 {
-	for (size_t i = 0; i < gates_output.size(); ++i)
+	for (size_t i = 0; i < count; ++i)
 	{
-		Index output = gates_output[i];
-		if (output == Index()) continue;
-
-		bool transistor = gates_transistor[i];
-		uint8_t result = 1;
-
-		for (Index input : gates_inputs[i])
+		for (size_t j = 0; j < gates_output.size(); ++j)
 		{
-			uint8_t value = input == Index() ? 1 : states[input];
+			Index output = gates_output[j];
+			if (output == Index()) continue;
 
-			if (transistor) result &= value;
-			else result ^= value;
+			bool transistor = gates_transistor[j];
+			uint8_t result = 1;
+
+			for (Index input : gates_inputs[j])
+			{
+				uint8_t value = input == Index() ? 1 : states[input];
+
+				if (transistor) result &= value;
+				else result ^= value;
+			}
+
+			states_next[output] |= result;
 		}
 
-		states_next[output] |= result;
+		std::swap(states, states_next);
+		std::fill(states_next.begin(), states_next.end(), 0);
 	}
-
-	std::swap(states, states_next);
-	std::fill(states_next.begin(), states_next.end(), 0);
 }
 
 void Engine::get_states(const void*& data, size_t& size) const

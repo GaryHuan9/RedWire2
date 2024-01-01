@@ -172,10 +172,10 @@ private:
 	std::unique_ptr<sf::RectangleShape> shape_fill;
 };
 
-class Updater : public Component
+class TickControl : public Component
 {
 public:
-	explicit Updater(Application& application);
+	explicit TickControl(Application& application);
 
 	void initialize() override;
 	void update(const Timer& timer) override;
@@ -203,13 +203,13 @@ private:
 		Maximum
 	};
 
-	struct ExecutePair
+	struct TicksPair
 	{
-		ExecutePair() = default;
+		TicksPair() = default;
 
-		ExecutePair(Duration duration, uint32_t count) : duration(duration), count(count) {}
+		TicksPair(Duration duration, uint32_t count) : duration(duration), count(count) {}
 
-		ExecutePair& operator+=(ExecutePair other)
+		TicksPair& operator+=(TicksPair other)
 		{
 			duration += other.duration;
 			count += other.count;
@@ -239,8 +239,8 @@ private:
 	bool selected_pause = false;
 
 	float last_display_time = 0.0f;
-	std::string display_updates_per_second;
-	std::string display_dropped_update_count;
+	std::string display_ticks_per_second;
+	std::string display_dropped_ticks;
 
 	uint64_t remain_count{};
 	uint64_t dropped_count = 0;
@@ -248,7 +248,7 @@ private:
 
 	Duration time_budget = as_duration(10);
 	Duration last_execute_rate = time_budget / 10;
-	ExecutePair executed;
+	TicksPair executed;
 };
 
 class Debugger : public Component

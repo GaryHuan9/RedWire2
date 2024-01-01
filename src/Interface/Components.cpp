@@ -503,18 +503,18 @@ void Debugger::update(const Timer& timer)
 	ImGui::End();
 }
 
-Updater::Updater(Application& application) : Component(application) {}
+TickControl::TickControl(Application& application) : Component(application) {}
 
-void Updater::initialize()
+void TickControl::initialize()
 {
 	controller = application.find_component<Controller>();
 }
 
-void Updater::update(const Timer& timer)
+void TickControl::update(const Timer& timer)
 {
 	Layer* layer = controller->get_layer();
 
-	if (ImGui::Begin("Updater") && layer != nullptr) update_interface();
+	if (ImGui::Begin("Ticks") && layer != nullptr) update_interface();
 	ImGui::End();
 
 	if (layer == nullptr) return;
@@ -522,18 +522,18 @@ void Updater::update(const Timer& timer)
 	float delta_time = Timer::as_float(timer.frame_time());
 	update(delta_time, layer->get_engine());
 
-	last_display_time += delta_time;
+	if (not selected_pause) last_display_time += delta_time;
 	if (last_display_time >= 1.0f) update_display();
 }
 
-void Updater::update_interface()
+void TickControl::update_interface()
 {
 	ImGui::SeparatorText("Control");
 
 	{
 		static constexpr std::array Names = { "Per Second", "Per Frame", "Manual", "Maximum" };
 		int type = static_cast<int>(selected_type);
-		ImGui::Combo("Type", &type, Names.data(), Names.size());
+		ImGui::Combo("Trigger Type", &type, Names.data(), Names.size());
 
 		Type old_type = selected_type;
 		selected_type = static_cast<Type>(type);
@@ -551,15 +551,12 @@ void Updater::update_interface()
 	{
 		static constexpr uint32_t TimeBudgetMin = 1;
 		static constexpr uint32_t TimeBudgetMax = 100;
-		auto budget = std::chrono::duration_cast<std::chrono::milliseconds>(time_budget).count();
-		ImGui::DragScalar("Time Budget", ImGuiDataType_U32, &budget, 1.0f, &TimeBudgetMin, &TimeBudgetMax, "%u ms");
-		time_budget = as_duration(budget);
+		uint32_t budget = std::chrono::duration_cast<std::chrono::milliseconds>(time_budget).count();
+		ImGui::DragScalar("Frame Time Budget", ImGuiDataType_U32, &budget, 1.0f, &TimeBudgetMin, &TimeBudgetMax, "%u ms");
+		time_budget = as_duration(std::clamp(budget, TimeBudgetMin, TimeBudgetMax));
 	}
 
-	if (selected_type != Type::Maximum)
-	{
-		ImGui::DragScalar("Target Count", ImGuiDataType_U32, &selected_count);
-	}
+	if (selected_type != Type::Maximum) ImGui::DragScalar("Target Count", ImGuiDataType_U32, &selected_count);
 
 	bool paused = selected_pause;
 	ImGui::BeginDisabled(paused);
@@ -576,7 +573,7 @@ void Updater::update_interface()
 		ImGui::SameLine();
 		ImGui::BeginDisabled(remain_count > 0);
 
-		if (ImGui::Button("Update"))
+		if (ImGui::Button("Begin"))
 		{
 			remain_count = selected_count;
 			executed = {};
@@ -586,18 +583,26 @@ void Updater::update_interface()
 		ImGui::EndDisabled();
 	}
 
+	if (paused)
+	{
+		float x = ImGui::GetCursorPosX();
+		ImGui::SameLine();
+		ImGui::SetCursorPosX(x);
+		ImGui::LabelText("Paused!", "");
+	}
+
 	ImGui::SeparatorText("Statistics");
 
 	{
-		const char* display = display_updates_per_second.c_str();
-		if (display_updates_per_second.empty()) display = "0";
-		ImGui::LabelText("Achieved Updates Per Second", display);
+		const char* display = display_ticks_per_second.c_str();
+		if (display_ticks_per_second.empty()) display = "0";
+		ImGui::LabelText("Achieved TPS", display);
 	}
 
-	if (not display_dropped_update_count.empty())
+	if (not display_dropped_ticks.empty())
 	{
 		ImGui::PushStyleColor(ImGuiCol_Text, 0xFF0000FF);
-		ImGui::LabelText("Dropped Update Count", display_dropped_update_count.c_str());
+		ImGui::LabelText("Dropped Ticks", display_dropped_ticks.c_str());
 		ImGui::PopStyleColor();
 	}
 
@@ -608,15 +613,15 @@ void Updater::update_interface()
 
 		ImGui::ProgressBar(progress, ImVec2(0.0f, 0.0f));
 		ImGui::SameLine(0.0f, ImGui::GetStyle().ItemInnerSpacing.x);
-		ImGui::TextUnformatted("Manual Update Progress");
+		ImGui::TextUnformatted("Tick Progress");
 	}
 }
 
-void Updater::update_display()
+void TickControl::update_display()
 {
 	last_display_time = 0.0f;
-	display_updates_per_second.clear();
-	display_dropped_update_count.clear();
+	display_ticks_per_second.clear();
+	display_dropped_ticks.clear();
 
 	auto to_string = [](uint64_t value) { return std::to_string(value); };
 
@@ -624,19 +629,19 @@ void Updater::update_display()
 	{
 		auto seconds = std::chrono::duration<float>(executed.duration);
 		float ratio = static_cast<float>(executed.count) / seconds.count();
-		display_updates_per_second = to_string(static_cast<uint64_t>(ratio));
+		display_ticks_per_second = to_string(static_cast<uint64_t>(ratio));
 
 		if (selected_type != Type::Manual) executed = {};
 	}
 
 	if (dropped_count > 0)
 	{
-		display_dropped_update_count = to_string(dropped_count);
+		display_dropped_ticks = to_string(dropped_count);
 		dropped_count = 0;
 	}
 }
 
-void Updater::update(float delta_time, Engine& engine)
+void TickControl::update(float delta_time, Engine& engine)
 {
 	if (selected_pause) return;
 
@@ -679,18 +684,19 @@ void Updater::update(float delta_time, Engine& engine)
 		}
 		case Type::Maximum:
 		{
-			execute(engine, std::numeric_limits<uint64_t>::max());
+			execute(engine, std::numeric_limits<uint32_t>::max());
 			break;
 		}
 	}
 }
 
-uint32_t Updater::execute(Engine& engine, uint64_t count)
+uint32_t TickControl::execute(Engine& engine, uint64_t count)
 {
+	assert(static_cast<uint32_t>(count) == count);
 	if (count == 0) return 0;
 
 	Duration budget = time_budget;
-	ExecutePair total;
+	TicksPair total;
 
 	while (true)
 	{
@@ -699,15 +705,17 @@ uint32_t Updater::execute(Engine& engine, uint64_t count)
 		attempt = std::clamp(attempt, uint64_t(1), count);
 
 		auto start = Clock::now();
-		for (uint64_t i = 0; i < attempt; ++i) engine.update();
+		engine.tick(static_cast<uint32_t>(attempt));
 
 		Duration elapsed = Clock::now() - start;
-		total += ExecutePair(elapsed, attempt);
+		total += TicksPair(elapsed, attempt);
 		count -= attempt;
 
 		if (count == 0 || elapsed >= budget) break;
-		last_execute_rate = total.duration / total.count;
 		budget -= elapsed;
+
+		last_execute_rate = total.duration / total.count;
+		last_execute_rate = std::max(last_execute_rate, Duration(1));
 	}
 
 	executed += total;

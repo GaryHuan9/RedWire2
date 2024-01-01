@@ -16,7 +16,7 @@ public:
 
 	void unregister_gate(Index index);
 
-	void update();
+	void tick(uint32_t count = 1);
 
 	void get_states(const void*& data, size_t& size) const;
 

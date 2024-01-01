@@ -41,9 +41,9 @@ Application::Application()
 	if (glewInit() != GLEW_OK) throw std::runtime_error("Unable initialize GLEW for OpenGL.");
 
 	make_component<Controller>();
+	make_component<TickControl>();
 	make_component<LayerView>();
 	make_component<Cursor>();
-	make_component<Updater>();
 
 #ifndef NDEBUG
 	make_component<Debugger>();

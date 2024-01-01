@@ -42,9 +42,9 @@ class Application;
 class Component;
 class Timer;
 class Controller;
+class TickControl;
 class LayerView;
 class Cursor;
-class Updater;
 class Debugger;
 
 template<class T>
