@@ -27,18 +27,19 @@ Application::Application()
 
 	if (not ImGui::SFML::Init(*window, false)) throw std::runtime_error("Unable to create SFML window.");
 
+	auto& io = ImGui::GetIO();;
+	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+	io.ConfigWindowsMoveFromTitleBarOnly = true;
+	io.IniFilename = "rsc/imgui.ini";
+
+	io.Fonts->AddFontFromFileTTF("rsc/JetBrainsMono/JetBrainsMono-Bold.ttf", 16.0f);
+	if (not ImGui::SFML::UpdateFontTexture()) throw std::runtime_error("Unable update font texture.");
+	if (glewInit() != GLEW_OK) throw std::runtime_error("Unable initialize GLEW for OpenGL.");
+
 	auto& style = ImGui::GetStyle();
 	configure_spacing(style);
 	configure_colors(style);
-
-	auto& io = ImGui::GetIO();
-	io.ConfigWindowsMoveFromTitleBarOnly = true;
-	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
-	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
-	io.Fonts->AddFontFromFileTTF("rsc/JetBrainsMono/JetBrainsMono-Bold.ttf", 16.0f);
-
-	if (not ImGui::SFML::UpdateFontTexture()) throw std::runtime_error("Unable update font texture.");
-	if (glewInit() != GLEW_OK) throw std::runtime_error("Unable initialize GLEW for OpenGL.");
 
 	make_component<Controller>();
 	make_component<TickControl>();

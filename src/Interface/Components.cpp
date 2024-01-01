@@ -552,7 +552,7 @@ void TickControl::update_interface()
 		static constexpr uint32_t TimeBudgetMin = 1;
 		static constexpr uint32_t TimeBudgetMax = 100;
 		uint32_t budget = std::chrono::duration_cast<std::chrono::milliseconds>(time_budget).count();
-		ImGui::DragScalar("Frame Time Budget", ImGuiDataType_U32, &budget, 1.0f, &TimeBudgetMin, &TimeBudgetMax, "%u ms");
+		ImGui::DragScalar("Time Budget", ImGuiDataType_U32, &budget, 1.0f, &TimeBudgetMin, &TimeBudgetMax, "%u ms");
 		time_budget = as_duration(std::clamp(budget, TimeBudgetMin, TimeBudgetMax));
 	}
 
