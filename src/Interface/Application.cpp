@@ -126,12 +126,14 @@ void Application::process_event(const sf::Event& event, bool& closed)
 		{
 			if (not handle_mouse()) break;
 			distribute(event);
+			break;
 		}
 		case sf::Event::KeyPressed:
 		case sf::Event::KeyReleased:
 		{
 			if (not handle_keyboard()) break;
 			distribute(event);
+			break;
 		}
 		default: break;
 	}

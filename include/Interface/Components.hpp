@@ -40,9 +40,14 @@ public:
 
 	[[nodiscard]] float get_aspect_ratio() const { return aspect_ratio; }
 
-	[[nodiscard]] Float2 get_point(Float2 percent) const;
+	[[nodiscard]]
+	Float2 get_point(Float2 percent) const
+	{
+		percent = percent * 2.0f - Float2(1.0f);
+		return center + extend * percent;
+	}
 
-	[[nodiscard]] sf::RenderStates get_render_states() const;
+	[[nodiscard]] const sf::RenderStates& get_render_states() const { return *render_states; }
 
 	void set_aspect_ratio(float value)
 	{
@@ -87,6 +92,7 @@ private:
 
 	void update_zoom();
 	void update_grid();
+	void update_render_states();
 
 	void draw_grid() const;
 	void draw_layer(const Layer& layer) const;
@@ -108,6 +114,7 @@ private:
 	std::unique_ptr<sf::Shader> shader_quad;
 	std::unique_ptr<sf::Shader> shader_wire;
 	std::unique_ptr<DrawContext> draw_context;
+	std::unique_ptr<sf::RenderStates> render_states;
 
 	static constexpr int32_t ZoomIncrement = 8;
 	static constexpr float ZoomLevelShift = 0.7f;
@@ -150,13 +157,15 @@ private:
 	};
 
 	void update_interface();
-	void update_input_event(const sf::Event& event);
+	void update_key_event(const sf::Event& event);
+	void update_mouse_event(const sf::Event& event);
 
-	void execute_keyboard();
+	void execute_key();
 	void execute_mouse(Int2 position);
-	void execute_drag(Int2 position);
 	Int2 place_wire(Int2 position);
 	Int2 place_port(Int2 position);
+
+	void draw_rectangle(Float2 center, Float2 size, uint32_t fill_color = ~uint32_t(), float outline = 0.0f, uint32_t outline_color = ~uint32_t());
 
 	Controller* controller{};
 	LayerView* layer_view{};
@@ -173,8 +182,7 @@ private:
 	DragType drag_type = DragType::None;
 	Int2 drag_origin;
 
-	std::unique_ptr<sf::RectangleShape> shape_outline;
-	std::unique_ptr<sf::RectangleShape> shape_fill;
+	std::unique_ptr<sf::RectangleShape> rectangle;
 };
 
 class TickControl : public Component

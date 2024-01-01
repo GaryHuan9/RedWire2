@@ -30,6 +30,17 @@ bool Layer::has(Int2 position, TileType type) const
 	return iterator->second->get(position).type == type;
 }
 
+void Layer::draw(DrawContext& context, Float2 min_position, Float2 max_position) const
+{
+	auto draw = [&context](Chunk& chunk)
+	{
+		chunk.update_draw_buffer(context);
+		chunk.draw(context);
+	};
+
+	for_each_chunk(draw, Float2::floor(min_position), Float2::ceil(max_position));
+}
+
 void Layer::set(Int2 position, TileTag tile)
 {
 	Int2 chunk_position = Chunk::get_chunk_position(position);
@@ -51,40 +62,77 @@ void Layer::set(Int2 position, TileTag tile)
 	if (not has_tiles) chunks.erase(iterator);
 }
 
-void Layer::draw(DrawContext& context, Float2 min_position, Float2 max_position) const
+void Layer::erase(Int2 min_position, Int2 max_position)
 {
-	Int2 min_chunk = Chunk::get_chunk_position(Float2::floor(min_position));
-	Int2 max_chunk = Chunk::get_chunk_position(Float2::ceil(max_position) - Int2(1)); //max_chunk is inclusive
-	Int2 search_area = min_chunk - max_chunk;
-
-	if (chunks.size() < search_area.x * search_area.y)
+	auto erase = [&](Chunk& chunk)
 	{
-		for (const auto& pair : chunks)
-		{
-			Int2 chunk_position = pair.first;
-			if (min_chunk.x > chunk_position.x || chunk_position.x > max_chunk.x) continue;
-			if (min_chunk.y > chunk_position.y || chunk_position.y > max_chunk.y) continue;
+		Int2 min = (min_position - chunk.chunk_position).max(Int2(0));
+		Int2 max = (max_position - chunk.chunk_position).min(Int2(static_cast<int32_t>(Chunk::Size)));
 
-			Chunk& chunk = *pair.second;
-			chunk.update_draw_buffer(context);
-			chunk.draw(context);
+		uint32_t remain = chunk.count();
+
+		for (int32_t y = min.y; y < max.y; ++y)
+		{
+			for (int32_t x = min.x; x < max.x; ++x)
+			{
+				Int2 current(x, y);
+				TileType type = chunk.get(current).type;
+				if (type == TileType::None) continue;
+				current += chunk.chunk_position;
+
+				if (type == TileType::Wire) Wire::erase(*this, current);
+				else if (type == TileType::Bridge) Bridge::erase(*this, current);
+				else if (type == TileType::Gate) Gate::erase(*this, min_position);
+				else throw std::domain_error("Unrecognized TileType.");
+
+				//Since empty chunks are automatically removed, check to see when all tiles are removed to avoid accessing a bad chunk
+				if (--remain == 0) return;
+			}
+		}
+	};
+
+	for_each_chunk(erase, min_position, max_position);
+}
+
+template<class Action>
+void Layer::for_each_chunk(Action action, Int2 min_position, Int2 max_position) const
+{
+	Int2 min_chunk, max_chunk;
+	get_chunk_bounds(min_position, max_position, min_chunk, max_chunk);
+
+	if (chunks.size() < (max_chunk - min_chunk).product())
+	{
+		//Manual while loop to support removal of chunks during iteration
+		auto iterator = chunks.begin();
+
+		while (iterator != chunks.end())
+		{
+			Int2 chunk_position = iterator->first;
+			Chunk* chunk = iterator->second.get();
+
+			++iterator;
+			if (min_chunk <= chunk_position && chunk_position < max_chunk) action(*chunk);
 		}
 	}
 	else
 	{
-		for (int32_t y = min_chunk.y; y <= max_chunk.y; ++y)
+		//Loop through all chunk positions
+		for (int32_t y = min_chunk.y; y < max_chunk.y; ++y)
 		{
-			for (int32_t x = min_chunk.x; x <= max_chunk.x; ++x)
+			for (int32_t x = min_chunk.x; x < max_chunk.x; ++x)
 			{
 				auto iterator = chunks.find(Int2(x, y));
 				if (iterator == chunks.end()) continue;
-
-				Chunk& chunk = *iterator->second;
-				chunk.update_draw_buffer(context);
-				chunk.draw(context);
+				action(*iterator->second);
 			}
 		}
 	}
+}
+
+void Layer::get_chunk_bounds(Int2 min_position, Int2 max_position, Int2& min_chunk, Int2& max_chunk)
+{
+	min_chunk = Chunk::get_chunk_position(min_position);
+	max_chunk = Chunk::get_chunk_position(max_position - Int2(1)) + Int2(1); //Exclusive
 }
 
 Layer::Chunk::Chunk(const Layer& layer, Int2 chunk_position) :
@@ -98,6 +146,12 @@ TileTag Layer::Chunk::get(Int2 position) const
 	TileType type = tile_types[index];
 	if (type == TileType::None) return {};
 	return { type, Index(tile_indices[index]) };
+}
+
+void Layer::Chunk::draw(DrawContext& context) const
+{
+	context.draw(true, vertex_buffer_quad);
+	context.draw(false, vertex_buffer_wire);
 }
 
 bool Layer::Chunk::set(Int2 position, TileTag tile)
@@ -123,12 +177,6 @@ bool Layer::Chunk::set(Int2 position, TileTag tile)
 
 	type = tile.type;
 	return occupied_tiles > 0;
-}
-
-void Layer::Chunk::draw(DrawContext& context) const
-{
-	context.draw(true, vertex_buffer_quad);
-	context.draw(false, vertex_buffer_wire);
 }
 
 void Layer::Chunk::update_draw_buffer(DrawContext& context)

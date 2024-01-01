@@ -25,7 +25,8 @@ LayerView::LayerView(Application& application) :
 	Component(application),
 	shader_quad(std::make_unique<sf::Shader>()),
 	shader_wire(std::make_unique<sf::Shader>()),
-	draw_context(std::make_unique<DrawContext>(shader_quad.get(), shader_wire.get()))
+	draw_context(std::make_unique<DrawContext>(shader_quad.get(), shader_wire.get())),
+	render_states(std::make_unique<sf::RenderStates>())
 {
 	Float2 window_size(window.getSize());
 	set_aspect_ratio(window_size.x / window_size.y);
@@ -46,7 +47,13 @@ void LayerView::update()
 	Layer* layer = controller->get_layer();
 	if (layer == nullptr) return;
 
-	if (dirty) update_grid();
+	if (dirty)
+	{
+		update_render_states();
+		update_grid();
+		dirty = false;
+	}
+
 	draw_grid();
 	draw_layer(*layer);
 }
@@ -58,24 +65,6 @@ void LayerView::input_event(const sf::Event& event)
 
 	Float2 window_size(window.getSize());
 	set_aspect_ratio(window_size.x / window_size.y);
-}
-
-Float2 LayerView::get_point(Float2 percent) const
-{
-	percent = percent * 2.0f - Float2(1.0f);
-	return center + extend * percent;
-}
-
-sf::RenderStates LayerView::get_render_states() const
-{
-	float scale;
-	Float2 origin;
-	get_scale_origin(scale, origin);
-
-	sf::RenderStates states;
-	states.transform.translate(origin.x, origin.y);
-	states.transform.scale(scale, scale);
-	return states;
 }
 
 void LayerView::get_scale_origin(float& scale, Float2& origin) const
@@ -115,8 +104,10 @@ void LayerView::update_grid()
 		Int2 int_min = Float2::ceil(min / static_cast<float>(gap)) * gap;
 		Int2 int_max = Float2::floor(max / static_cast<float>(gap)) * gap;
 
-		sf::Color color(255, 255, 255, static_cast<int8_t>(GridLineAlpha * percent));
-		if (color.a == 0) return;
+		auto alpha = static_cast<uint8_t>(GridLineAlpha * percent);
+		if (alpha == 0) return;
+
+		sf::Color color(255, 255, 255, alpha);
 
 		for (int32_t int_x = int_min.x; int_x <= int_max.x; int_x += gap)
 		{
@@ -141,8 +132,18 @@ void LayerView::update_grid()
 		drawer(zoom_gap, 1.0f - zoom_percent);
 	}
 	else drawer(zoom_gap, 1.0f);
+}
 
-	dirty = false;
+void LayerView::update_render_states()
+{
+	float scale;
+	Float2 origin;
+	get_scale_origin(scale, origin);
+
+	sf::Transform transform;
+	transform.translate(origin.x, origin.y);
+	transform.scale(scale, scale);
+	render_states->transform = transform;
 }
 
 void LayerView::draw_grid() const
@@ -170,18 +171,7 @@ void LayerView::draw_layer(const Layer& layer) const
 	draw_context->clear();
 }
 
-Cursor::Cursor(Application& application) :
-	Component(application),
-	shape_outline(std::make_unique<sf::RectangleShape>()),
-	shape_fill(std::make_unique<sf::RectangleShape>())
-{
-	sf::Color color(230, 225, 240);
-
-	shape_outline->setFillColor(sf::Color::Transparent);
-	shape_outline->setOutlineThickness(0.03f);
-	shape_outline->setOutlineColor(color);
-	shape_fill->setFillColor(color);
-}
+Cursor::Cursor(Application& application) : Component(application), rectangle(std::make_unique<sf::RectangleShape>()) {}
 
 void Cursor::initialize()
 {
@@ -207,7 +197,7 @@ void Cursor::update()
 		ImGui::End();
 	}
 
-	if (application.handle_keyboard()) execute_keyboard();
+	if (application.handle_keyboard()) execute_key();
 	if (Int2 position; try_get_mouse_position(position)) execute_mouse(position);
 
 	last_mouse_point = layer_view->get_point(mouse_percent);
@@ -217,13 +207,27 @@ void Cursor::input_event(const sf::Event& event)
 {
 	Component::input_event(event);
 
-	if (event.type == sf::Event::MouseWheelScrolled)
+	switch (event.type)
 	{
-		float delta = event.mouseWheelScroll.delta / -32.0f;
-		layer_view->change_zoom(delta, mouse_percent);
+		case sf::Event::MouseWheelScrolled:
+		{
+			float delta = event.mouseWheelScroll.delta / -32.0f;
+			layer_view->change_zoom(delta, mouse_percent);
+			break;
+		}
+		case sf::Event::KeyPressed:
+		{
+			update_key_event(event);
+			break;
+		}
+		case sf::Event::MouseButtonPressed:
+		case sf::Event::MouseButtonReleased:
+		{
+			update_mouse_event(event);
+			break;
+		}
+		default :break;
 	}
-
-	if (event.type == sf::Event::KeyPressed || event.type == sf::Event::MouseButtonPressed) update_input_event(event);
 }
 
 bool Cursor::try_get_mouse_position(Int2& position) const
@@ -285,48 +289,62 @@ void Cursor::update_interface()
 
 			break;
 		}
-		case ToolType::TileRemoval:
-		{
-			//TODO: tile removal
-			break;
-		}
 		default: break;
 	}
 }
 
-void Cursor::update_input_event(const sf::Event& event)
+void Cursor::update_key_event(const sf::Event& event)
 {
-	if (event.type == sf::Event::KeyPressed)
+	assert(event.type == sf::Event::KeyPressed);
+
+	const auto& key = event.key;
+	const auto& code = key.code;
+
+	if (code == sf::Keyboard::E) selected_tool = ToolType::WirePlacement;
+	else if (code == sf::Keyboard::F) selected_tool = ToolType::TileRemoval;
+
+	if (code == sf::Keyboard::R && selected_tool == ToolType::PortPlacement && selected_port != PortType::Bridge)
 	{
-		const auto& key = event.key;
-		const auto& code = key.code;
-
-		if (code == sf::Keyboard::E) selected_tool = ToolType::WirePlacement;
-
-		if (code == sf::Keyboard::R && selected_tool == ToolType::PortPlacement && selected_port != PortType::Bridge)
-		{
-			selected_rotation = selected_rotation.get_next();
-		}
-
-		if (sf::Keyboard::Num1 <= code && code <= sf::Keyboard::Num3)
-		{
-			selected_tool = ToolType::PortPlacement;
-
-			if (code == sf::Keyboard::Num1) selected_port = PortType::Transistor;
-			else if (code == sf::Keyboard::Num2) selected_port = PortType::Inverter;
-			else selected_port = PortType::Bridge;
-		}
+		selected_rotation = selected_rotation.get_next();
 	}
-	else
-	{
-		assert(event.type == sf::Event::MouseButtonPressed);
-		const auto& mouse = event.mouseButton;
 
-		if (mouse.button == sf::Mouse::Right) selected_tool = ToolType::Mouse;
+	if (sf::Keyboard::Num1 <= code && code <= sf::Keyboard::Num3)
+	{
+		selected_tool = ToolType::PortPlacement;
+
+		if (code == sf::Keyboard::Num1) selected_port = PortType::Transistor;
+		else if (code == sf::Keyboard::Num2) selected_port = PortType::Inverter;
+		else selected_port = PortType::Bridge;
 	}
 }
 
-void Cursor::execute_keyboard()
+void Cursor::update_mouse_event(const sf::Event& event)
+{
+	assert(event.type == sf::Event::MouseButtonPressed || event.type == sf::Event::MouseButtonReleased);
+
+	const auto& mouse = event.mouseButton;
+
+	if (event.type == sf::Event::MouseButtonPressed)
+	{
+		if (mouse.button == sf::Mouse::Right) selected_tool = ToolType::Mouse;
+	}
+	else
+	{
+		if (Int2 position; selected_tool == ToolType::TileRemoval &&
+		                   mouse.button == sf::Mouse::Left &&
+		                   try_get_mouse_position(position))
+		{
+			assert(drag_type != DragType::None);
+			Layer* layer = controller->get_layer();
+
+			if (layer != nullptr) layer->erase(position.min(drag_origin), position.max(drag_origin) + Int2(1));
+		}
+
+		if (mouse.button == sf::Mouse::Left) drag_type = DragType::None;
+	}
+}
+
+void Cursor::execute_key()
 {
 	Int2 view_input;
 	if (sf::Keyboard::isKeyPressed(sf::Keyboard::W)) view_input += Int2(0, 1);
@@ -348,64 +366,76 @@ void Cursor::execute_keyboard()
 void Cursor::execute_mouse(Int2 position)
 {
 	bool button = sf::Mouse::isButtonPressed(sf::Mouse::Left);
-	if (not button) drag_type = DragType::None;
 
-	if (selected_tool == ToolType::Mouse)
+	//Update mouse drag properties
+	if (button)
 	{
-		if (button) layer_view->set_point(mouse_percent, last_mouse_point);
-		return;
-	}
-
-	if (button) execute_drag(position);
-	Int2 draw_position = position;
-
-	sf::RenderStates render_states = layer_view->get_render_states();
-
-	if (selected_tool == ToolType::WirePlacement)
-	{
-		if (button) draw_position = place_wire(position);
-	}
-	else
-	{
-		if (button) draw_position = place_port(position);
-
-		if (selected_port != PortType::Bridge)
+		if (drag_type == DragType::None)
 		{
-			constexpr float Extend = 0.15f;
-			constexpr float Offset = 0.5f - Extend;
-
-			Float2 origin = Float2(draw_position) + Float2(0.5f);
-			Int2 direction = selected_rotation.get_direction();
-			Float2 center = origin + Float2(direction) * Offset;
-			center -= Float2(Extend, Extend);
-
-			shape_fill->setPosition(center.x, center.y);
-			shape_fill->setSize({ Extend * 2.0f, Extend * 2.0f });
-			window.draw(*shape_fill, render_states);
+			drag_type = DragType::Origin;
+			drag_origin = position;
+		}
+		else if (drag_type == DragType::Origin && position != drag_origin)
+		{
+			Int2 delta = position - drag_origin;
+			delta = delta.max(-delta); //Absolute value
+			drag_type = delta.x > delta.y ? DragType::Horizontal : DragType::Vertical;
 		}
 	}
 
-	{
-		Float2 center(draw_position);
-		shape_outline->setPosition(center.x, center.y);
-		shape_outline->setSize({ 1.0f, 1.0f });
-		window.draw(*shape_outline, render_states);
-	}
-}
+	//Prepare for drawing
+	static constexpr uint32_t OutlineColor = make_color(230, 225, 240);
+	Int2 rectangle_min = position;
+	Int2 rectangle_size = Int2(1);
+	uint32_t fill_color = 0;
 
-void Cursor::execute_drag(Int2 position)
-{
-	if (drag_type == DragType::None)
+	//Execute selected tool
+	switch (selected_tool)
 	{
-		drag_type = DragType::Origin;
-		drag_origin = position;
+		case ToolType::Mouse:
+		{
+			if (button) layer_view->set_point(mouse_percent, last_mouse_point);
+			return;
+		}
+		case ToolType::WirePlacement:
+		{
+			if (button) rectangle_min = place_wire(position);
+			break;
+		}
+		case ToolType::PortPlacement:
+		{
+			if (button) rectangle_min = place_port(position);
+
+			if (selected_port != PortType::Bridge)
+			{
+				//Draw a little square to indicate rotation
+				constexpr float Extend = 0.15f;
+				constexpr float Offset = 0.5f - Extend;
+
+				Float2 origin = Float2(rectangle_min) + Float2(0.5f);
+				Int2 direction = selected_rotation.get_direction();
+				Float2 center = origin + Float2(direction) * Offset;
+				draw_rectangle(center, Float2(Extend * 2), OutlineColor);
+			}
+
+			break;
+		}
+		case ToolType::TileRemoval:
+		{
+			if (not button) break;
+			assert(drag_type != DragType::None);
+
+			Int2 max = position.max(drag_origin) + Int2(1);
+			rectangle_min = position.min(drag_origin);
+			rectangle_size = max - rectangle_min;
+			fill_color = make_color(220, 10, 30, 50);
+
+			break;
+		}
 	}
-	else if (drag_type == DragType::Origin && position != drag_origin)
-	{
-		Int2 delta = position - drag_origin;
-		delta = delta.max(-delta); //Absolute value
-		drag_type = delta.x > delta.y ? DragType::Horizontal : DragType::Vertical;
-	}
+
+	Float2 center = Float2(rectangle_min) + Float2(rectangle_size) / 2.0f;
+	draw_rectangle(center, Float2(rectangle_size), fill_color, 0.03f, OutlineColor);
 }
 
 Int2 Cursor::place_wire(Int2 position)
@@ -481,6 +511,16 @@ Int2 Cursor::place_port(Int2 position)
 	return position;
 }
 
+void Cursor::draw_rectangle(Float2 center, Float2 size, uint32_t fill_color, float outline, uint32_t outline_color)
+{
+	rectangle->setPosition(center.x - size.x / 2.0f, center.y - size.y / 2.0f);
+	rectangle->setSize(sf::Vector2f(size.x, size.y));
+	rectangle->setFillColor(sf::Color(fill_color));
+	rectangle->setOutlineThickness(outline);
+	rectangle->setOutlineColor(sf::Color(outline_color));
+	window.draw(*rectangle, layer_view->get_render_states());
+}
+
 Debugger::Debugger(Application& application) : Component(application) {}
 
 void Debugger::update()
@@ -516,7 +556,7 @@ void Debugger::update()
 	if (debug_wire >= 0 && wires.contains(Index(debug_wire)))
 	{
 		const Wire& wire = wires[Index(debug_wire)];
-		sf::RenderStates states = layer_view->get_render_states();
+		const auto& states = layer_view->get_render_states();
 		sf::RectangleShape shape(sf::Vector2f(0.5f, 0.5f));
 
 		shape.setFillColor(sf::Color::Green);

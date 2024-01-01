@@ -475,7 +475,7 @@ void Bridge::draw(DrawContext& context, Int2 position, Index index, const Layer&
 
 	auto corner0 = Float2(position);
 	Float2 corner1 = corner0 + Float2(1.0f);
-	context.emplace_quad(corner0, corner1, 0xB6343EFF);
+	context.emplace_quad(corner0, corner1, make_color(182, 52, 62));
 }
 
 Gate::Gate(Gate::Type type, const TileRotation& rotation) : type(type), rotation(rotation)
@@ -511,9 +511,9 @@ void Gate::erase(Layer& layer, Int2 position)
 
 void Gate::draw(DrawContext& context, Int2 position, Index index, const Layer& layer)
 {
-	static constexpr uint32_t ColorTransistor = 0x3EAD5FFF;
-	static constexpr uint32_t ColorInverter = 0x3B49FFFF;
-	static constexpr uint32_t ColorDisabled = 0x121118FF;
+	static constexpr uint32_t ColorTransistor = make_color(62, 173, 95);
+	static constexpr uint32_t ColorInverter = make_color(59, 73, 255);
+	static constexpr uint32_t ColorDisabled = make_color(18, 17, 24);
 	static constexpr float DisabledSize = 0.5f;
 
 	const auto& gate = layer.get_list<Gate>()[index];
@@ -529,7 +529,7 @@ void Gate::draw(DrawContext& context, Int2 position, Index index, const Layer& l
 	corner0 = center - Float2(DisabledSize / 2.0f);
 	corner1 = corner0 + Float2(DisabledSize);
 
-	context.emplace_quad(corner0, corner1, 0x111118FF);
+	context.emplace_quad(corner0, corner1, ColorDisabled);
 }
 
 void Gate::update(Layer& layer, Int2 position)

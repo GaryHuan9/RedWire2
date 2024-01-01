@@ -43,15 +43,22 @@ public:
 
 	[[nodiscard]] bool has(Int2 position, TileType type) const;
 
+	void draw(DrawContext& context, Float2 min_position, Float2 max_position) const;
+
 	void set(Int2 position, TileTag tile);
 
-	void draw(DrawContext& context, Float2 min_position, Float2 max_position) const;
+	void erase(Int2 min_position, Int2 max_position);
 
 private:
 	class Chunk;
 
 	template<class... Ts>
 	using ListsType = std::tuple<RecyclingList<Ts>...>;
+
+	template<class Action>
+	void for_each_chunk(Action action, Int2 min_position, Int2 max_position) const;
+
+	static void get_chunk_bounds(Int2 min_position, Int2 max_position, Int2& min_chunk, Int2& max_chunk);
 
 	template<class T, size_t I = 0>
 	static constexpr size_t get_list_index()
@@ -73,9 +80,11 @@ public:
 
 	[[nodiscard]] TileTag get(Int2 position) const;
 
-	bool set(Int2 position, TileTag tile);
+	[[nodiscard]] uint32_t count() const { return occupied_tiles; }
 
 	void draw(DrawContext& context) const;
+
+	bool set(Int2 position, TileTag tile);
 
 	void mark_dirty() { vertices_dirty = true; }
 
