@@ -29,7 +29,9 @@ bool imgui_begin(const char* label)
 
 bool imgui_tooltip(const char* text)
 {
-	if (not ImGui::BeginItemTooltip()) return false;
+	static constexpr auto Flags = ImGuiHoveredFlags_DelayNormal | ImGuiHoveredFlags_Stationary;
+	if (not ImGui::IsItemHovered(Flags)) return false;
+	if (not ImGui::BeginTooltip()) return false;
 
 	float width = ImGui::GetIO().DisplaySize.x * 0.18f;
 	ImGui::PushTextWrapPos(width);

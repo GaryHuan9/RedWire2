@@ -236,7 +236,7 @@ private:
 
 	void update_interface();
 	void update_display();
-	void update(float delta_time, Engine& engine);
+	void update(Engine& engine);
 
 	uint32_t execute(Engine& engine, uint64_t count);
 
@@ -260,6 +260,8 @@ private:
 	bool selected_pause = false;
 
 	float last_display_time = 0.0f;
+	uint64_t last_frame_count = 0;
+	std::string display_frames_per_second;
 	std::string display_ticks_per_second;
 	std::string display_dropped_ticks;
 

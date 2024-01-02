@@ -258,7 +258,7 @@ void Cursor::update_interface()
 
 	imgui_tooltip(
 		"Currently selected cursor tool. Can also be switched with button shortcuts: Mouse = [RMB], Wire = [E], "
-		"Transistor = [Num1], Inverter = [Num2], Bridge = [Num3], Removal = [F], Copy = [C], Paste = [V], Cut = [X]"
+		"Transistor = [Num1], Inverter = [Num2], Bridge = [Num3], Removal = [Q], Copy = [C], Paste = [V], Cut = [X]"
 	);
 
 	switch (selected_tool)
@@ -301,7 +301,7 @@ void Cursor::update_key_event(const sf::Event& event)
 	const auto& code = key.code;
 
 	if (code == sf::Keyboard::E) selected_tool = ToolType::WirePlacement;
-	else if (code == sf::Keyboard::F) selected_tool = ToolType::TileRemoval;
+	else if (code == sf::Keyboard::Q) selected_tool = ToolType::TileRemoval;
 
 	if (code == sf::Keyboard::R && selected_tool == ToolType::PortPlacement && selected_port != PortType::Bridge)
 	{
@@ -320,8 +320,6 @@ void Cursor::update_key_event(const sf::Event& event)
 
 void Cursor::update_mouse_event(const sf::Event& event)
 {
-	assert(event.type == sf::Event::MouseButtonPressed || event.type == sf::Event::MouseButtonReleased);
-
 	const auto& mouse = event.mouseButton;
 
 	if (event.type == sf::Event::MouseButtonPressed)
@@ -330,17 +328,22 @@ void Cursor::update_mouse_event(const sf::Event& event)
 	}
 	else
 	{
-		if (Int2 position; selected_tool == ToolType::TileRemoval &&
-		                   mouse.button == sf::Mouse::Left &&
-		                   try_get_mouse_position(position))
+		assert(event.type == sf::Event::MouseButtonReleased);
+		if (mouse.button != sf::Mouse::Left || drag_type == DragType::None) return;
+
+		if (Int2 position; selected_tool == ToolType::TileRemoval && try_get_mouse_position(position))
 		{
-			assert(drag_type != DragType::None);
 			Layer* layer = controller->get_layer();
 
-			if (layer != nullptr) layer->erase(position.min(drag_origin), position.max(drag_origin) + Int2(1));
+			if (layer != nullptr)
+			{
+				Int2 min = position.min(drag_origin);
+				Int2 max = position.max(drag_origin) + Int2(1);
+				layer->erase(min, max);
+			}
 		}
 
-		if (mouse.button == sf::Mouse::Left) drag_type = DragType::None;
+		drag_type = DragType::None;
 	}
 }
 
@@ -615,10 +618,7 @@ void TickControl::update()
 
 	if (layer == nullptr) return;
 
-	float delta_time = Timer::as_float(application.get_timer().frame_time());
-	update(delta_time, layer->get_engine());
-
-	if (not selected_pause) last_display_time += delta_time;
+	if (not selected_pause) last_display_time += Timer::as_float(application.get_timer().frame_time());
 	if (last_display_time >= 1.0f) update_display();
 }
 
@@ -702,6 +702,11 @@ void TickControl::update_interface()
 	ImGui::SeparatorText("Statistics");
 
 	{
+		ImGui::LabelText("Current FPS", display_frames_per_second.c_str());
+		imgui_tooltip("Number of frames shown on screen every second.");
+	}
+
+	{
 		const char* display = display_ticks_per_second.c_str();
 		if (display_ticks_per_second.empty()) display = "0";
 		ImGui::LabelText("Achieved TPS", display);
@@ -735,11 +740,21 @@ void TickControl::update_interface()
 
 void TickControl::update_display()
 {
-	last_display_time = 0.0f;
+	display_frames_per_second.clear();
 	display_ticks_per_second.clear();
 	display_dropped_ticks.clear();
 
 	auto to_string = [](uint64_t value) { return std::to_string(value); };
+
+	{
+		uint64_t frame_count = application.get_timer().frame_count();
+		uint64_t delta_frame_count = frame_count - last_frame_count;
+		float rate = static_cast<float>(delta_frame_count) / last_display_time;
+
+		display_frames_per_second = to_string(std::lround(rate));
+		last_display_time = 0.0f;
+		last_frame_count = frame_count;
+	}
 
 	if (executed.count > 0)
 	{
@@ -757,7 +772,7 @@ void TickControl::update_display()
 	}
 }
 
-void TickControl::update(float delta_time, Engine& engine)
+void TickControl::update(Engine& engine)
 {
 	if (selected_pause) return;
 
@@ -765,6 +780,7 @@ void TickControl::update(float delta_time, Engine& engine)
 	{
 		case Type::PerSecond:
 		{
+			float delta_time = Timer::as_float(application.get_timer().frame_time());
 			float count = delta_time * static_cast<float>(selected_count);
 			auto new_count = static_cast<uint64_t>(count);
 

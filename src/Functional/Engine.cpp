@@ -13,6 +13,7 @@ void Engine::register_wire(Index index)
 
 	assert(index < states.size());
 	states[index] = 0;
+	states_next[index] = 0;
 }
 
 void Engine::register_gate(Index index, Index output, bool transistor, const std::span<Index>& inputs)
