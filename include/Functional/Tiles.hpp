@@ -15,7 +15,7 @@ class TileType
 public:
 	enum Value : uint8_t
 	{
-		None = 0,
+		None,
 		Wire,
 		Bridge,
 		Gate,
@@ -57,7 +57,7 @@ class TileRotation
 public:
 	enum Value : uint8_t
 	{
-		East = 0,
+		East,
 		West,
 		South,
 		North
@@ -203,7 +203,9 @@ public:
 		Inverter
 	};
 
-	Gate(Type type, const TileRotation& rotation);
+	Gate() : Gate(Type::Transistor, TileRotation()) {}
+
+	Gate(Type type, TileRotation rotation);
 
 	static void insert(Layer& layer, Int2 position, Gate::Type type, TileRotation rotation);
 

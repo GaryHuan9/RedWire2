@@ -21,7 +21,20 @@ public:
 	[[nodiscard]] Layer* get_layer() const { return layer.get(); }
 
 private:
+	enum class ActionType : uint8_t
+	{
+		None,
+		Save,
+		Load,
+		New
+	};
+
+	void update_interface();
+
 	std::unique_ptr<Layer> layer;
+	std::array<char, 100> path_buffer{};
+
+	ActionType selected_action = ActionType::None;
 };
 
 class LayerView : public Component
@@ -72,8 +85,8 @@ public:
 		if (new_zoom == zoom) return zoom;
 		zoom = new_zoom;
 
-		update_zoom();
 		mark_dirty();
+		update_zoom();
 		return zoom;
 	}
 
@@ -83,6 +96,27 @@ public:
 		float result = change_zoom(delta);
 		set_point(percent, point);
 		return result;
+	}
+
+	void reset()
+	{
+		center = Float2(0.0f);
+		zoom = 1.7f;
+		mark_dirty();
+		update_zoom();
+	}
+
+	friend BinaryWriter& operator<<(BinaryWriter& writer, const LayerView& layer_view)
+	{
+		return writer << layer_view.center << layer_view.zoom;
+	}
+
+	friend BinaryReader& operator>>(BinaryReader& reader, LayerView& layer_view)
+	{
+		reader >> layer_view.center >> layer_view.zoom;
+		layer_view.mark_dirty();
+		layer_view.update_zoom();
+		return reader;
 	}
 
 private:
@@ -104,7 +138,7 @@ private:
 	float aspect_ratio{};
 	bool dirty = true;
 
-	float zoom = 1.7f;
+	float zoom{};
 	int32_t zoom_level{};
 	int32_t zoom_gap{};
 	float zoom_scale{};

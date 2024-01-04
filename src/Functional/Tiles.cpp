@@ -519,7 +519,7 @@ void Bridge::draw(DrawContext& context, Int2 position, Index index, const Layer&
 	context.emplace_quad(corner0, corner1, make_color(182, 52, 62));
 }
 
-Gate::Gate(Gate::Type type, const TileRotation& rotation) : type(type), rotation(rotation)
+Gate::Gate(Gate::Type type, TileRotation rotation) : type(type), rotation(rotation)
 {
 	assert(type == Type::Transistor || type == Type::Inverter);
 	assert(rotation.get_next() == rotation.get_next()); //Assert rotation is valid

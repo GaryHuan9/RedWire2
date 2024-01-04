@@ -84,7 +84,10 @@ BinaryWriter& operator<<(BinaryWriter& writer, const Engine& engine)
 
 BinaryReader& operator>>(BinaryReader& reader, Engine& engine)
 {
+	assert(engine.states.empty());
 	reader >> engine.states;
+	engine.states_next.resize(engine.states.size());
+
 	reader >> engine.gates_output;
 	reader >> engine.gates_transistor;
 	reader >> engine.gates_inputs;

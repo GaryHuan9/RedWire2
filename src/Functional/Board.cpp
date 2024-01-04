@@ -10,7 +10,12 @@ namespace rw
 
 Board::Board() = default;
 
-Layer::Layer() : engine(std::make_unique<Engine>()) {}
+Layer::Layer(bool raw)
+{
+	if (raw) return;
+	lists = std::make_unique<ListsType>();
+	engine = std::make_unique<Engine>();
+}
 
 Layer::~Layer() = default;
 
@@ -50,7 +55,7 @@ void Layer::set(Int2 position, TileTag tile)
 	{
 		if (tile.type == TileType::None) return;
 
-		auto chunk = std::make_unique<Chunk>(*this, chunk_position * Chunk::Size);
+		auto chunk = std::make_unique<Chunk>(*this, chunk_position);
 		auto pair = chunks.emplace(chunk_position, std::move(chunk));
 
 		assert(pair.second);
@@ -68,7 +73,6 @@ void Layer::erase(Int2 min_position, Int2 max_position)
 	{
 		Int2 min = (min_position - chunk.chunk_position).max(Int2(0));
 		Int2 max = (max_position - chunk.chunk_position).min(Int2(static_cast<int32_t>(Chunk::Size)));
-
 		uint32_t remain = chunk.count();
 
 		for (int32_t y = min.y; y < max.y; ++y)
@@ -100,34 +104,37 @@ BinaryWriter& operator<<(BinaryWriter& writer, const Layer& layer)
 
 	for (const auto& [position, chunk] : layer.chunks)
 	{
-		writer << chunk->chunk_position;
+		writer << position;
 		chunk->write(writer);
 	}
 
-	return writer;
+	return writer << *layer.lists << *layer.engine;
 }
 
 BinaryReader& operator>>(BinaryReader& reader, Layer& layer)
 {
 	assert(layer.chunks.empty());
+	assert(layer.engine == nullptr);
 
 	uint32_t size;
 	reader >> size;
 
 	for (uint32_t i = 0; i < size; ++i)
 	{
-		Int2 chunk_position;
-		reader >> chunk_position;
+		Int2 position;
+		reader >> position;
 
-		auto pointer = std::make_unique<Layer::Chunk>(layer, chunk_position);
-		auto pair = layer.chunks.emplace(chunk_position, std::move(pointer));
+		auto pointer = std::make_unique<Layer::Chunk>(layer, position);
+		auto pair = layer.chunks.emplace(position, std::move(pointer));
 		assert(pair.second);
 
 		Layer::Chunk* chunk = pair.first->second.get();
 		chunk->read(reader);
 	}
 
-	return reader;
+	layer.lists = std::make_unique<Layer::ListsType>();
+	layer.engine = std::make_unique<Engine>();
+	return reader >> *layer.lists >> *layer.engine;
 }
 
 template<class Action>
@@ -172,7 +179,7 @@ void Layer::get_chunk_bounds(Int2 min_position, Int2 max_position, Int2& min_chu
 }
 
 Layer::Chunk::Chunk(const Layer& layer, Int2 chunk_position) :
-	layer(layer), chunk_position(chunk_position),
+	layer(layer), chunk_position(chunk_position * Size),
 	tile_types(std::make_unique<decltype(tile_types)::element_type>()),
 	tile_indices(std::make_unique<decltype(tile_indices)::element_type>()) {}
 
@@ -325,6 +332,8 @@ void Layer::Chunk::read(BinaryReader& reader)
 
 		i = end;
 	}
+
+	if (occupied_tiles > 0) mark_dirty();
 }
 
 TileTag Layer::Chunk::get(size_t tile_index) const

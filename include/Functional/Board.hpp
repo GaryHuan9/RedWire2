@@ -31,14 +31,14 @@ public:
 	using DataTypes = TypeSet<Wire, Bridge, Gate>;
 	using ListsType = DataTypes::Wrap<RecyclingList>;
 
-	Layer();
+	explicit Layer(bool raw = true);
 	~Layer();
 
 	template<class T>
-	[[nodiscard]] const RecyclingList<T>& get_list() const { return lists.get<T>(); }
+	[[nodiscard]] const RecyclingList<T>& get_list() const { return lists->get<T>(); }
 
 	template<class T>
-	RecyclingList<T>& get_list() { return lists.get<T>(); }
+	RecyclingList<T>& get_list() { return lists->get<T>(); }
 
 	[[nodiscard]] Engine& get_engine() const { return *engine; }
 
@@ -64,7 +64,7 @@ private:
 	static void get_chunk_bounds(Int2 min_position, Int2 max_position, Int2& min_chunk, Int2& max_chunk);
 
 	std::unordered_map<Int2, std::unique_ptr<Chunk>> chunks;
-	ListsType lists;
+	std::unique_ptr<ListsType> lists;
 	std::unique_ptr<Engine> engine;
 };
 
@@ -93,7 +93,7 @@ public:
 	static Int2 get_local_position(Int2 position) { return { position.x & (Chunk::Size - 1), position.y & (Chunk::Size - 1) }; }
 
 	const Layer& layer;
-	const Int2 chunk_position;
+	const Int2 chunk_position; //Note that this is the chunk position in tile space
 
 	static constexpr uint32_t SizeLog2 = 5;
 	static constexpr uint32_t Size = 1u << SizeLog2;

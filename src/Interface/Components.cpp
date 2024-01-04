@@ -9,6 +9,11 @@
 #include "SFML/Graphics.hpp"
 #include "imgui.h"
 
+#include <filesystem>
+#include <fstream>
+
+namespace fs = std::filesystem;
+
 namespace rw
 {
 
@@ -16,10 +21,96 @@ Controller::Controller(Application& application) : Component(application) {}
 
 void Controller::initialize()
 {
-	layer = std::make_unique<Layer>();
+	layer = std::make_unique<Layer>(false);
+	std::string("test.rw2").copy(path_buffer.data(), path_buffer.size());
 }
 
-void Controller::update() {}
+void Controller::update()
+{
+	if (layer == nullptr)
+	{
+		if (imgui_begin("Controller")) ImGui::End();
+		return;
+	}
+
+	if (imgui_begin("Controller"))
+	{
+		update_interface();
+		ImGui::End();
+	}
+}
+
+static void save_layer(const fs::path& path, const std::unique_ptr<Layer>& layer, const LayerView& layer_view)
+{
+	fs::create_directories(path.parent_path());
+
+	auto stream = std::make_shared<std::ofstream>(path, std::ios::binary | std::ios::trunc);
+	if (not stream->good()) throw std::runtime_error("Unable to open stream.");
+
+	BinaryWriter writer(stream);
+	writer << static_cast<uint32_t>(3);
+	writer << *layer << layer_view;
+}
+
+static void load_layer(const fs::path& path, std::unique_ptr<Layer>& layer, LayerView& layer_view)
+{
+	auto stream = std::make_shared<std::ifstream>(path, std::ios::binary);
+	if (not stream->good()) throw std::runtime_error("Unable to open stream.");
+
+	BinaryReader reader(stream);
+	uint32_t version;
+	reader >> version;
+	if (version != 3) throw std::runtime_error("Unrecognized version.");
+
+	layer = std::make_unique<Layer>();
+	reader >> *layer >> layer_view;
+}
+
+static void new_layer(std::unique_ptr<Layer>& layer, LayerView& layer_view)
+{
+	layer = std::make_unique<Layer>(false);
+	layer_view.reset();
+}
+
+void Controller::update_interface()
+{
+	assert(layer != nullptr);
+
+	ImGui::SeparatorText("Serialization");
+	ImGui::InputText("File Name", path_buffer.data(), path_buffer.size());
+	fs::path path = fs::path("saves") / std::string(path_buffer.data());
+
+	if (selected_action == ActionType::None)
+	{
+		if (ImGui::Button("Save")) selected_action = ActionType::Save;
+
+		ImGui::SameLine();
+		ImGui::BeginDisabled(not fs::is_regular_file(path));
+		if (ImGui::Button("Load")) selected_action = ActionType::Load;
+
+		ImGui::EndDisabled();
+
+		ImGui::SameLine();
+		if (ImGui::Button("New")) selected_action = ActionType::New;
+	}
+	else
+	{
+		if (ImGui::Button("Confirm"))
+		{
+			auto& layer_view = *application.find_component<LayerView>();
+
+			if (selected_action == ActionType::Save) save_layer(path, layer, layer_view);
+			else if (selected_action == ActionType::Load) load_layer(path, layer, layer_view);
+			else if (selected_action == ActionType::New) new_layer(layer, layer_view);
+
+			selected_action = ActionType::None;
+		}
+
+		ImGui::SameLine();
+
+		if (ImGui::Button("Cancel")) selected_action = ActionType::None;
+	}
+}
 
 LayerView::LayerView(Application& application) :
 	Component(application),
@@ -40,6 +131,7 @@ LayerView::~LayerView() = default;
 void LayerView::initialize()
 {
 	controller = application.find_component<Controller>();
+	reset();
 }
 
 void LayerView::update()
@@ -794,10 +886,11 @@ void TickControl::update(Engine& engine)
 			remain_count = execute(engine, remain_count + new_count);
 			per_second_error += count - static_cast<float>(new_count);
 
-			if (remain_count > selected_count)
+			if (remain_count > new_count)
 			{
-				dropped_count += remain_count - selected_count;
-				remain_count = selected_count;
+				uint64_t dropping = remain_count - new_count;
+				dropped_count += dropping;
+				remain_count -= dropping;
 			}
 
 			break;
