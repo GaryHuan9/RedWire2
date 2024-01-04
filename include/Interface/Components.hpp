@@ -2,7 +2,7 @@
 
 #include "main.hpp"
 #include "Application.hpp"
-#include "Utility/Types.hpp"
+#include "Utility/SimpleTypes.hpp"
 #include "Functional/Tiles.hpp"
 
 #include <chrono>
@@ -200,10 +200,7 @@ public:
 		update_display();
 	}
 
-	void resume()
-	{
-		selected_pause = false;
-	}
+	void resume() { selected_pause = false; }
 
 private:
 	using Clock = std::chrono::high_resolution_clock;

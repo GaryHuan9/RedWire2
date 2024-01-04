@@ -51,5 +51,8 @@ template<class T>
 class Vector2;
 typedef Vector2<float> Float2;
 typedef Vector2<int32_t> Int2;
+class Index;
+class BinaryWriter;
+class BinaryReader;
 
 }

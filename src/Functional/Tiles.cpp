@@ -411,6 +411,47 @@ void Wire::split_positions(Layer& layer, std::vector<Int2>& positions, Index wir
 	while (not positions.empty());
 }
 
+static void write(BinaryWriter& writer, const std::unordered_set<Int2>& positions)
+{
+	writer << positions.size();
+	for (Int2 position : positions) writer << position;
+}
+
+BinaryWriter& operator<<(BinaryWriter& writer, const Wire& wire)
+{
+	auto write = [&writer](const std::unordered_set<Int2>& positions)
+	{
+		writer << static_cast<uint32_t>(positions.size());
+		for (Int2 position : positions) writer << position;
+	};
+
+	write(wire.positions);
+	write(wire.bridges);
+	return writer;
+}
+
+BinaryReader& operator>>(BinaryReader& reader, Wire& wire)
+{
+	auto read = [&reader](std::unordered_set<Int2>& positions)
+	{
+		assert(positions.empty());
+		uint32_t size;
+		reader >> size;
+
+		for (uint32_t i = 0; i < size; ++i)
+		{
+			Int2 position;
+			reader >> position;
+			bool success = positions.insert(position).second;
+			assert(success);
+		}
+	};
+
+	read(wire.positions);
+	read(wire.bridges);
+	return reader;
+}
+
 void Bridge::insert(Layer& layer, Int2 position)
 {
 	TileTag tile = layer.get(position);

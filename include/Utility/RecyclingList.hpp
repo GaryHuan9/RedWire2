@@ -1,7 +1,8 @@
 #pragma once
 
 #include "main.hpp"
-#include "Types.hpp"
+#include "SimpleTypes.hpp"
+
 #include <map>
 
 namespace rw
@@ -91,6 +92,18 @@ public:
 		swap(value.ranges, other.ranges);
 	}
 
+	friend BinaryWriter& operator<<(BinaryWriter& writer, const RecyclingList& list)
+	{
+		list.write(writer);
+		return writer;
+	}
+
+	friend BinaryReader& operator>>(BinaryReader& reader, RecyclingList& list)
+	{
+		list.read(reader);
+		return reader;
+	}
+
 private:
 	/**
 	 * Performs an action on each valid range of indices, passed in as start and end parameters.
@@ -99,6 +112,9 @@ private:
 	void for_each_range(Action action) const;
 
 	void destruct();
+
+	void write(BinaryWriter& writer) const;
+	void read(BinaryReader& reader);
 
 	T* items = nullptr;
 	size_t count = 0;
@@ -199,7 +215,7 @@ void RecyclingList<T, Allocator>::reserve(size_t threshold)
 	if (threshold <= capacity) return;
 
 	//Calculate new capacity
-	size_t new_capacity = std::max(capacity * 2, 8LLU);
+	size_t new_capacity = std::max(capacity * 2, 8LLu);
 	while (new_capacity < threshold) new_capacity *= 2;
 	T* new_items = allocator.allocate(new_capacity);
 
@@ -242,19 +258,30 @@ template<class T, class Allocator>
 template<class Action>
 void RecyclingList<T, Allocator>::for_each_range(Action action) const
 {
-	auto iterator = ranges.begin();
 	size_t current = 0;
 
-	while (iterator != ranges.end())
+	if (not ranges.empty())
 	{
-		std::pair<uint32_t, uint32_t> range = *iterator;
-		action(current, range.second);
+		auto iterator = ranges.begin();
+		assert(iterator != ranges.end());
 
-		current = range.first;
+		if (iterator->second > 0) action(current, iterator->second);
+
+		current = iterator->first;
 		++iterator;
+
+		while (iterator != ranges.end())
+		{
+			std::pair<uint32_t, uint32_t> range = *iterator;
+			assert(current != range.second);
+			action(current, range.second);
+
+			current = range.first;
+			++iterator;
+		}
 	}
 
-	action(current, capacity);
+	if (current != capacity) action(current, capacity);
 }
 
 template<class T, class Allocator>
@@ -268,6 +295,63 @@ void RecyclingList<T, Allocator>::destruct()
 	}
 
 	allocator.deallocate(items, capacity);
+}
+
+template<class T, class Allocator>
+void RecyclingList<T, Allocator>::write(BinaryWriter& writer) const
+{
+	size_t current = 0;
+	writer << capacity;
+
+	auto write_range = [&](size_t start, size_t end)
+	{
+		assert(start >= current);
+		writer << static_cast<uint32_t>(start - current);
+		writer << static_cast<uint32_t>(end - start);
+		current = end;
+
+		for (; start < end; ++start) writer << items[start];
+	};
+
+	for_each_range(write_range);
+	writer << static_cast<uint32_t>(capacity - current);
+}
+
+template<class T, class Allocator>
+void RecyclingList<T, Allocator>::read(BinaryReader& reader)
+{
+	assert(items == nullptr);
+	assert(count == 0);
+	assert(capacity == 0);
+
+	size_t current = 0;
+	reader >> capacity;
+	if (capacity > 0) items = allocator.allocate(capacity);
+
+	while (true)
+	{
+		uint32_t range_size;
+		reader >> range_size;
+
+		if (range_size == 0) assert(current == 0 || current == capacity);
+		else ranges.emplace(current + range_size, current);
+
+		current += range_size;
+		if (current == capacity) break;
+
+		uint32_t new_count;
+		reader >> new_count;
+		count += new_count;
+
+		uint32_t end = current + new_count;
+
+		for (; current < end; ++current)
+		{
+			T* pointer = items + current;
+			std::construct_at(pointer);
+			reader >> *pointer;
+		}
+	}
 }
 
 }

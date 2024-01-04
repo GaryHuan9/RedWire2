@@ -4,6 +4,7 @@
 
 #include <string>
 #include <random>
+#include <sstream>
 #include <unordered_set>
 
 using namespace rw;
@@ -18,6 +19,49 @@ protected:
 	}
 
 	void assert_contents() const
+	{
+		auto stream = std::make_shared<std::stringstream>();
+		decltype(list) copy;
+
+		BinaryWriter writer(stream);
+		BinaryReader reader(stream);
+
+		writer << list;
+		reader >> copy;
+
+		assert_contents(reference, list);
+		assert_contents(reference, copy);
+	}
+
+	void emplace(const std::string& value)
+	{
+		assert(!value.empty());
+
+		auto iterator = std::find(reference.begin(), reference.end(), "");
+		Index index(std::distance(reference.begin(), iterator));
+
+		if (iterator == reference.end()) reference.push_back(value);
+		else reference[index] = value;
+
+		ASSERT_EQ(list.emplace(value), index);
+		assert_contents();
+	}
+
+	void erase(Index index)
+	{
+		assert(!reference[index].empty());
+		ASSERT_TRUE(list.contains(index));
+
+		reference[index] = "";
+		list.erase(index);
+
+		assert_contents();
+	}
+
+	RecyclingList<std::string> list;
+
+private:
+	static void assert_contents(const std::vector<std::string>& reference, const RecyclingList<std::string>& list)
 	{
 		size_t count = 0;
 
@@ -50,33 +94,7 @@ protected:
 		ASSERT_EQ(current, reference.size());
 	}
 
-	void emplace(const std::string& value)
-	{
-		assert(!value.empty());
-
-		auto iterator = std::find(reference.begin(), reference.end(), "");
-		Index index(std::distance(reference.begin(), iterator));
-
-		if (iterator == reference.end()) reference.push_back(value);
-		else reference[index] = value;
-
-		ASSERT_EQ(list.emplace(value), index);
-		assert_contents();
-	}
-
-	void erase(Index index)
-	{
-		assert(!reference[index].empty());
-		ASSERT_TRUE(list.contains(index));
-
-		reference[index] = "";
-		list.erase(index);
-
-		assert_contents();
-	}
-
 	std::vector<std::string> reference;
-	RecyclingList<std::string> list;
 };
 
 TEST_F(RecyclingListTests, Simple)

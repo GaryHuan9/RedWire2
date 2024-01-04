@@ -1,7 +1,7 @@
 #pragma once
 
 #include "main.hpp"
-#include "Utility/Types.hpp"
+#include "Utility/SimpleTypes.hpp"
 
 #include <array>
 #include <tuple>

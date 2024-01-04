@@ -617,6 +617,7 @@ void TickControl::update()
 	}
 
 	if (layer == nullptr) return;
+	update(layer->get_engine());
 
 	if (not selected_pause) last_display_time += Timer::as_float(application.get_timer().frame_time());
 	if (last_display_time >= 1.0f) update_display();

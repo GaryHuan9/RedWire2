@@ -1,8 +1,8 @@
 #pragma once
 
 #include "main.hpp"
-#include "Utility/Types.hpp"
 #include "Drawing.hpp"
+#include "Utility/SimpleTypes.hpp"
 
 #include <unordered_set>
 #include <span>
@@ -22,12 +22,12 @@ public:
 		Note
 	};
 
-	constexpr TileType(Value value = Value::None) : value(value) // NOLINT(*-explicit-constructor)
+	constexpr TileType(Value value = Value::None) : data(value) // NOLINT(*-explicit-constructor)
 	{
 		assert(static_cast<unsigned int>(value) < 5);
 	}
 
-	[[nodiscard]] constexpr Value get_value() const { return value; }
+	[[nodiscard]] constexpr Value get_value() const { return data; }
 
 	[[nodiscard]] const char* to_string() const;
 
@@ -35,8 +35,21 @@ public:
 
 	[[nodiscard]] constexpr bool operator!=(TileType other) const { return get_value() != other.get_value(); }
 
+	friend BinaryWriter& operator<<(BinaryWriter& writer, TileType type)
+	{
+		return writer << type.get_value();
+	}
+
+	friend BinaryReader& operator>>(BinaryReader& reader, TileType& type)
+	{
+		TileType::Value value;
+		reader >> value;
+		type = value;
+		return reader;
+	}
+
 private:
-	Value value;
+	Value data;
 };
 
 class TileRotation
@@ -50,7 +63,7 @@ public:
 		North
 	};
 
-	constexpr TileRotation(Value value = Value::East) : value(value) // NOLINT(*-explicit-constructor)
+	constexpr TileRotation(Value value = Value::East) : data(value) // NOLINT(*-explicit-constructor)
 	{
 		assert(static_cast<unsigned int>(value) < 4);
 	}
@@ -59,7 +72,7 @@ public:
 
 	[[nodiscard]] Int2 get_direction() const;
 
-	[[nodiscard]] constexpr Value get_value() const { return value; }
+	[[nodiscard]] constexpr Value get_value() const { return data; }
 
 	[[nodiscard]] const char* to_string() const;
 
@@ -67,15 +80,30 @@ public:
 
 	[[nodiscard]] constexpr bool operator!=(TileRotation other) const { return get_value() != other.get_value(); }
 
+	friend BinaryWriter& operator<<(BinaryWriter& writer, TileRotation rotation)
+	{
+		return writer << rotation.get_value();
+	}
+
+	friend BinaryReader& operator>>(BinaryReader& reader, TileRotation& rotation)
+	{
+		TileRotation::Value value;
+		reader >> value;
+		rotation = value;
+		return reader;
+	}
+
 private:
-	Value value;
+	Value data;
 };
 
 struct TileTag
 {
-	TileTag() : TileTag(TileType::None, Index()) {}
+	explicit TileTag(TileType type = TileType::None, Index index = Index()) : type(type), index(index) {}
 
-	TileTag(TileType type, Index index) : type(type), index(index) {}
+	bool operator==(const TileTag& other) const { return type == other.type && index == other.index; }
+
+	bool operator!=(const TileTag& other) const { return not(other == *this); }
 
 	TileType type;
 	Index index;
@@ -134,6 +162,9 @@ public:
 	 */
 	static void split_positions(Layer& layer, std::vector<Int2>& positions, Index wire_index);
 
+	friend BinaryWriter& operator<<(BinaryWriter& writer, const Wire& wire);
+	friend BinaryReader& operator>>(BinaryReader& reader, Wire& wire);
+
 #ifndef NDEBUG
 	const uint32_t color;
 #endif
@@ -158,7 +189,9 @@ public:
 
 	static void draw(DrawContext& context, Int2 position, Index index, const Layer& layer);
 
-private:
+	friend BinaryWriter& operator<<(BinaryWriter& writer, const Bridge& bridge) { return writer; }
+
+	friend BinaryReader& operator>>(BinaryReader& reader, Bridge& bridge) { return reader; }
 };
 
 class Gate
@@ -179,6 +212,20 @@ public:
 	static void draw(DrawContext& context, Int2 position, Index index, const Layer& layer);
 
 	static void update(Layer& layer, Int2 position);
+
+	friend BinaryWriter& operator<<(BinaryWriter& writer, const Gate& gate)
+	{
+		writer << gate.type << gate.rotation;
+		for (Index index : gate.wire_indices) writer << index;
+		return writer;
+	}
+
+	friend BinaryReader& operator>>(BinaryReader& reader, Gate& gate)
+	{
+		reader >> gate.type >> gate.rotation;
+		for (Index& index : gate.wire_indices) reader >> index;
+		return reader;
+	}
 
 private:
 	[[nodiscard]] Index output_index() const { return wire_indices.front(); }

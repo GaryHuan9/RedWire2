@@ -27,7 +27,7 @@ void Engine::register_gate(Index index, Index output, bool transistor, const std
 
 	assert(index < gates_output.size());
 	gates_output[index] = output;
-	gates_transistor[index] = transistor;
+	gates_transistor[index] = transistor ? 1 : 0;
 
 	assert(inputs.size() == 3);
 	std::copy(inputs.begin(), inputs.end(), gates_inputs[index].begin());
@@ -48,7 +48,7 @@ void Engine::tick(uint32_t count)
 			Index output = gates_output[j];
 			if (output == Index()) continue;
 
-			bool transistor = gates_transistor[j];
+			bool transistor = gates_transistor[j] != 0;
 			uint8_t result = 1;
 
 			for (Index input : gates_inputs[j])
@@ -71,6 +71,24 @@ void Engine::get_states(const void*& data, size_t& size) const
 {
 	data = states.data();
 	size = states.size();
+}
+
+BinaryWriter& operator<<(BinaryWriter& writer, const Engine& engine)
+{
+	writer << engine.states;
+	writer << engine.gates_output;
+	writer << engine.gates_transistor;
+	writer << engine.gates_inputs;
+	return writer;
+}
+
+BinaryReader& operator>>(BinaryReader& reader, Engine& engine)
+{
+	reader >> engine.states;
+	reader >> engine.gates_output;
+	reader >> engine.gates_transistor;
+	reader >> engine.gates_inputs;
+	return reader;
 }
 
 }

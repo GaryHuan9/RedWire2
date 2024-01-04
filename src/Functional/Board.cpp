@@ -18,7 +18,7 @@ TileTag Layer::get(Int2 position) const
 {
 	Int2 chunk_position = Chunk::get_chunk_position(position);
 	auto iterator = chunks.find(chunk_position);
-	if (iterator == chunks.end()) return {};
+	if (iterator == chunks.end()) return TileTag();
 	return iterator->second->get(position);
 }
 
@@ -82,7 +82,7 @@ void Layer::erase(Int2 min_position, Int2 max_position)
 
 				if (type == TileType::Wire) Wire::erase(*this, current);
 				else if (type == TileType::Bridge) Bridge::erase(*this, current);
-				else if (type == TileType::Gate) Gate::erase(*this, min_position);
+				else if (type == TileType::Gate) Gate::erase(*this, current);
 				else throw std::domain_error("Unrecognized TileType.");
 
 				//Since empty chunks are automatically removed, check to see when all tiles are removed to avoid accessing a bad chunk
@@ -92,6 +92,42 @@ void Layer::erase(Int2 min_position, Int2 max_position)
 	};
 
 	for_each_chunk(erase, min_position, max_position);
+}
+
+BinaryWriter& operator<<(BinaryWriter& writer, const Layer& layer)
+{
+	writer << static_cast<uint32_t>(layer.chunks.size());
+
+	for (const auto& [position, chunk] : layer.chunks)
+	{
+		writer << chunk->chunk_position;
+		chunk->write(writer);
+	}
+
+	return writer;
+}
+
+BinaryReader& operator>>(BinaryReader& reader, Layer& layer)
+{
+	assert(layer.chunks.empty());
+
+	uint32_t size;
+	reader >> size;
+
+	for (uint32_t i = 0; i < size; ++i)
+	{
+		Int2 chunk_position;
+		reader >> chunk_position;
+
+		auto pointer = std::make_unique<Layer::Chunk>(layer, chunk_position);
+		auto pair = layer.chunks.emplace(chunk_position, std::move(pointer));
+		assert(pair.second);
+
+		Layer::Chunk* chunk = pair.first->second.get();
+		chunk->read(reader);
+	}
+
+	return reader;
 }
 
 template<class Action>
@@ -137,16 +173,15 @@ void Layer::get_chunk_bounds(Int2 min_position, Int2 max_position, Int2& min_chu
 
 Layer::Chunk::Chunk(const Layer& layer, Int2 chunk_position) :
 	layer(layer), chunk_position(chunk_position),
-	tile_types(new TileType[Size * Size]()),
-	tile_indices(new uint32_t[Size * Size]()) {}
+	tile_types(std::make_unique<decltype(tile_types)::element_type>()),
+	tile_indices(std::make_unique<decltype(tile_indices)::element_type>()) {}
 
 TileTag Layer::Chunk::get(Int2 position) const
 {
-	size_t index = get_index(position);
-	TileType type = tile_types[index];
-	if (type == TileType::None) return {};
-	return { type, Index(tile_indices[index]) };
+	return get(get_tile_index(position));
 }
+
+uint32_t Layer::Chunk::count() const { return occupied_tiles; }
 
 void Layer::Chunk::draw(DrawContext& context) const
 {
@@ -156,10 +191,11 @@ void Layer::Chunk::draw(DrawContext& context) const
 
 bool Layer::Chunk::set(Int2 position, TileTag tile)
 {
-	uint32_t index = get_index(position);
-	TileType& type = tile_types[index];
+	uint32_t tile_index = get_tile_index(position);
+	TileType& type = (*tile_types)[tile_index];
+	uint32_t& index = (*tile_indices)[tile_index];
 
-	if (type == tile.type && (type == TileType::None || tile_indices[index] == tile.index)) return occupied_tiles > 0;
+	if (type == tile.type && (type == TileType::None || index == tile.index)) return occupied_tiles > 0;
 
 	if (type != TileType::None)
 	{
@@ -171,13 +207,15 @@ bool Layer::Chunk::set(Int2 position, TileTag tile)
 	if (tile.type != TileType::None)
 	{
 		++occupied_tiles;
-		tile_indices[index] = tile.index;
+		index = tile.index;
 		mark_dirty();
 	}
 
 	type = tile.type;
 	return occupied_tiles > 0;
 }
+
+void Layer::Chunk::mark_dirty() { vertices_dirty = true; }
 
 void Layer::Chunk::update_draw_buffer(DrawContext& context)
 {
@@ -223,6 +261,78 @@ void Layer::Chunk::update_draw_buffer(DrawContext& context)
 
 	vertex_buffer_quad = context.flush_buffer(true);
 	vertex_buffer_wire = context.flush_buffer(false);
+}
+
+void Layer::Chunk::write(BinaryWriter& writer) const
+{
+	TileTag last_tile;
+	uint8_t count = 0;
+
+	auto write = [&writer](TileTag tile, uint8_t count)
+	{
+		if (count == 0) return;
+		writer << tile.type << count;
+
+		if (tile.type == TileType::None) return;
+		assert(tile.index.valid());
+		writer << tile.index;
+	};
+
+	for (size_t i = 0; i < Size * Size; ++i)
+	{
+		TileTag tile = get(i);
+
+		if (tile != last_tile)
+		{
+			write(last_tile, count);
+			last_tile = tile;
+			count = 1;
+		}
+		else if (++count == std::numeric_limits<decltype(count)>::max())
+		{
+			write(last_tile, count);
+			count = 0;
+		}
+	}
+
+	write(last_tile, count);
+}
+
+void Layer::Chunk::read(BinaryReader& reader)
+{
+	assert(occupied_tiles == 0);
+
+	for (size_t i = 0; i < Size * Size;)
+	{
+		TileType type;
+		uint8_t count;
+		reader >> type >> count;
+
+		assert(count != 0);
+		size_t end = i + count;
+
+		std::fill(tile_types->begin() + i, tile_types->begin() + end, type);
+
+		if (type != TileType::None)
+		{
+			Index index;
+			reader >> index;
+			assert(index.valid());
+
+			std::fill(tile_indices->begin() + i, tile_indices->begin() + end, index);
+			occupied_tiles += count;
+		}
+
+		i = end;
+	}
+}
+
+TileTag Layer::Chunk::get(size_t tile_index) const
+{
+	TileType type = (*tile_types)[tile_index];
+	if (type == TileType::None) return TileTag();
+	Index index((*tile_indices)[tile_index]);
+	return TileTag(type, index);
 }
 
 }

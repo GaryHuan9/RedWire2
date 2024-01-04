@@ -1,6 +1,6 @@
 #include "Functional/Drawing.hpp"
 #include "Utility/Functions.hpp"
-#include "Utility/Types.hpp"
+#include "Utility/SimpleTypes.hpp"
 
 #include "SFML/Graphics.hpp"
 #include "GL/glew.h"
