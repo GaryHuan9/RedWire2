@@ -193,8 +193,48 @@ public:
 	template<class U>
 	constexpr Wrapper<U>& get() { return std::get<get_index<U>()>(data); }
 
+	template<class Action>
+	constexpr void for_each(Action action) const { for_each_index([&]<size_t I>() { action(std::get<I>(data)); }); }
+
+	template<class Action>
+	constexpr void for_each(Action action) { for_each_index([&]<size_t I>() { action(std::get<I>(data)); }); }
+
+	friend BinaryWriter& operator<<(BinaryWriter& writer, const Wrap& value)
+	{
+		value.write(writer);
+		return writer;
+	}
+
+	friend BinaryReader& operator>>(BinaryReader& reader, Wrap& value)
+	{
+		value.read(reader);
+		return reader;
+	}
+
 private:
+	template<class Action, size_t I = 0>
+	constexpr void for_each_index(Action action) const
+	{
+		action.template operator()<I>();
+		if constexpr (I == sizeof...(Ts)) return;
+		else for_each_index<Action, I + 1>(action);
+	}
+
+	void write(BinaryWriter& writer) const;
+	void read(BinaryReader& reader);
+
 	std::tuple<Wrapper<T>, Wrapper<Ts>...> data;
+};
+
+class NonCopyable
+{
+public:
+	NonCopyable(const NonCopyable&) = delete;
+	NonCopyable& operator=(const NonCopyable&) = delete;
+
+protected:
+	NonCopyable() = default;
+	~NonCopyable() = default;
 };
 
 template<class T>
@@ -209,7 +249,7 @@ concept BinaryReadable = requires(BinaryReader reader, T value) { reader >> valu
 template<class T>
 concept Serializable = BinaryWritable<T> && BinaryReadable<T>;
 
-class BinaryWriter
+class BinaryWriter : NonCopyable
 {
 public:
 	explicit BinaryWriter(std::shared_ptr<std::ostream> stream) : stream(std::move(stream)) {}
@@ -259,7 +299,7 @@ private:
 	std::shared_ptr<std::ostream> stream;
 };
 
-class BinaryReader
+class BinaryReader : NonCopyable
 {
 public:
 	explicit BinaryReader(std::shared_ptr<std::istream> stream) : stream(std::move(stream)) {}
@@ -319,13 +359,34 @@ void Vector2<T>::write(BinaryWriter& writer) const { writer << x << y; }
 template<class T>
 void Vector2<T>::read(BinaryReader& reader) { reader >> x >> y; }
 
-inline BinaryWriter& operator<<(BinaryWriter& writer, Index value) { return writer << (value.data + 1); }
+inline BinaryWriter& operator<<(BinaryWriter& writer, Index value)
+{
+	++value.data;
+	writer << value.data;
+	return writer;
+}
 
 inline BinaryReader& operator>>(BinaryReader& reader, Index& value)
 {
 	reader >> value.data;
 	--value.data;
 	return reader;
+}
+
+template<class T, class... Ts>
+template<template<class> class Wrapper>
+void TypeSet<T, Ts...>::Wrap<Wrapper>::write(BinaryWriter& writer) const
+{
+	auto write = [&writer]<class U>(const U& value) { writer << value; };
+	for_each(write);
+}
+
+template<class T, class... Ts>
+template<template<class> class Wrapper>
+void TypeSet<T, Ts...>::Wrap<Wrapper>::read(BinaryReader& reader)
+{
+	auto read = [&reader]<class U>(U& value) { reader >> value; };
+	for_each(read);
 }
 
 }

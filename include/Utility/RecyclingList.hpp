@@ -9,32 +9,20 @@ namespace rw
 {
 
 template<class T, class Allocator = std::allocator<T>>
-class RecyclingList
+class RecyclingList : NonCopyable
 {
 public:
 	RecyclingList() = default;
 
-	~RecyclingList() { destruct(); }
+	~RecyclingList();
 
 	RecyclingList(RecyclingList&& other) noexcept : RecyclingList() { swap(*this, other); }
 
 	RecyclingList& operator=(RecyclingList&& other) noexcept
 	{
-		destruct();
-
-		items = other.items;
-		count = other.count;
-		capacity = other.capacity;
-		other.capacity = 0;
-		other.count = 0;
-
-		allocator = std::move(other.allocator);
-		ranges = std::move(other.ranges);
+		swap(*this, other);
 		return *this;
 	}
-
-	RecyclingList(const RecyclingList&) = delete;
-	RecyclingList& operator=(const RecyclingList&) = delete;
 
 	[[nodiscard]] size_t size() const { return count; }
 
@@ -87,6 +75,7 @@ public:
 		using std::swap;
 
 		swap(value.items, other.items);
+		swap(value.count, other.count);
 		swap(value.capacity, other.capacity);
 		swap(value.allocator, other.allocator);
 		swap(value.ranges, other.ranges);
@@ -111,8 +100,6 @@ private:
 	template<class Action>
 	void for_each_range(Action action) const;
 
-	void destruct();
-
 	void write(BinaryWriter& writer) const;
 	void read(BinaryReader& reader);
 
@@ -122,6 +109,19 @@ private:
 	Allocator allocator;
 	std::map<uint32_t, uint32_t> ranges; //Maps from the end of a range (exclusive) to the start of a range (inclusive)
 };
+
+template<class T, class Allocator>
+RecyclingList<T, Allocator>::~RecyclingList()
+{
+	if (capacity == 0) return;
+
+	if constexpr (not std::is_trivially_destructible_v<T>)
+	{
+		for_each([](T& item) { std::destroy_at(&item); });
+	}
+
+	allocator.deallocate(items, capacity);
+}
 
 template<class T, class Allocator>
 bool RecyclingList<T, Allocator>::contains(Index index) const
@@ -282,19 +282,6 @@ void RecyclingList<T, Allocator>::for_each_range(Action action) const
 	}
 
 	if (current != capacity) action(current, capacity);
-}
-
-template<class T, class Allocator>
-void RecyclingList<T, Allocator>::destruct()
-{
-	if (capacity == 0) return;
-
-	if constexpr (not std::is_trivially_destructible_v<T>)
-	{
-		for_each([](T& item) { std::destroy_at(&item); });
-	}
-
-	allocator.deallocate(items, capacity);
 }
 
 template<class T, class Allocator>

@@ -13,25 +13,21 @@ using GLenum = unsigned int;
 namespace rw
 {
 
-class DataBuffer
+class DataBuffer : NonCopyable
 {
 public:
-	DataBuffer();
+	DataBuffer(DataBuffer&& other) noexcept : DataBuffer() { swap(*this, other); }
 
 	DataBuffer(GLenum type, GLenum usage);
 
-	DataBuffer(DataBuffer&& value) noexcept : DataBuffer() { swap(*this, value); }
-
-	DataBuffer& operator=(DataBuffer&& value) noexcept
-	{
-		swap(*this, value);
-		return *this;
-	}
-
+	DataBuffer();
 	~DataBuffer();
 
-	DataBuffer(const DataBuffer&) = delete;
-	DataBuffer& operator=(const DataBuffer&) = delete;
+	DataBuffer& operator=(DataBuffer&& other) noexcept
+	{
+		swap(*this, other);
+		return *this;
+	}
 
 	template<class T>
 	void update(const T* data, size_t count)
@@ -92,63 +88,22 @@ private:
 	GLenum type;
 	GLenum usage;
 	GLuint handle;
-	size_t size;
+	uint32_t size;
 };
 
-class DrawContext
-{
-public:
-	DrawContext(sf::Shader* shader_quad, sf::Shader* shader_wire);
-
-	void emplace_quad(Float2 corner0, Float2 corner1, uint32_t color);
-	void emplace_wire(Float2 corner0, Float2 corner1, Index wire_index);
-
-	[[nodiscard]] VertexBuffer flush_buffer(bool quad);
-
-	void draw(bool quad, const VertexBuffer& buffer) const;
-
-	void update_wire_states(const void* data, size_t size);
-
-	void clear();
-
-public:
-	struct QuadVertex
-	{
-		Float2 position;
-		uint32_t color{};
-	};
-
-	struct WireVertex
-	{
-		Float2 position;
-		uint32_t index{};
-	};
-
-	std::vector<QuadVertex> vertices_quad;
-	std::vector<WireVertex> vertices_wire;
-
-	sf::Shader* shader_quad;
-	sf::Shader* shader_wire;
-	DataBuffer wire_states_buffer;
-};
-
-class VertexBuffer
+class VertexBuffer : NonCopyable
 {
 public:
 	VertexBuffer();
-
-	VertexBuffer(VertexBuffer&& value) noexcept : VertexBuffer() { swap(*this, value); }
-
-	VertexBuffer& operator=(VertexBuffer&& value) noexcept
-	{
-		swap(*this, value);
-		return *this;
-	}
-
 	~VertexBuffer();
 
-	VertexBuffer(const VertexBuffer&) = delete;
-	VertexBuffer& operator=(const VertexBuffer&) = delete;
+	VertexBuffer(VertexBuffer&& other) noexcept : VertexBuffer() { swap(*this, other); }
+
+	VertexBuffer& operator=(VertexBuffer&& other) noexcept
+	{
+		swap(*this, other);
+		return *this;
+	}
 
 	template<class T>
 	void update(const T* new_data, size_t new_count)
@@ -189,8 +144,45 @@ private:
 	void update_impl(size_t new_count);
 
 	GLuint handle;
-	size_t count;
+	uint32_t count;
 	DataBuffer data;
+};
+
+class DrawContext
+{
+public:
+	DrawContext(sf::Shader* shader_quad, sf::Shader* shader_wire);
+
+	void emplace_quad(Float2 corner0, Float2 corner1, uint32_t color);
+	void emplace_wire(Float2 corner0, Float2 corner1, Index wire_index);
+
+	[[nodiscard]] VertexBuffer flush_buffer(bool quad);
+
+	void draw(bool quad, const VertexBuffer& buffer) const;
+
+	void update_wire_states(const void* data, size_t size);
+
+	void clear();
+
+public:
+	struct QuadVertex
+	{
+		Float2 position;
+		uint32_t color{};
+	};
+
+	struct WireVertex
+	{
+		Float2 position;
+		uint32_t index{};
+	};
+
+	std::vector<QuadVertex> vertices_quad;
+	std::vector<WireVertex> vertices_wire;
+
+	sf::Shader* shader_quad;
+	sf::Shader* shader_wire;
+	DataBuffer wire_states_buffer;
 };
 
 } // rw
