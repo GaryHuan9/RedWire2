@@ -414,28 +414,32 @@ void Cursor::update_mouse_event(const sf::Event& event)
 {
 	const auto& mouse = event.mouseButton;
 
-	if (event.type == sf::Event::MouseButtonPressed)
+	switch (event.type)
 	{
-		if (mouse.button == sf::Mouse::Right) selected_tool = ToolType::Mouse;
-	}
-	else
-	{
-		assert(event.type == sf::Event::MouseButtonReleased);
-		if (mouse.button != sf::Mouse::Left || drag_type == DragType::None) return;
-
-		if (Int2 position; selected_tool == ToolType::TileRemoval && try_get_mouse_position(position))
+		case sf::Event::MouseButtonPressed:
 		{
-			Layer* layer = controller->get_layer();
+			if (mouse.button == sf::Mouse::Right) selected_tool = ToolType::Mouse;
+			break;
+		}
+		case sf::Event::MouseButtonReleased:
+		{
+			if (mouse.button != sf::Mouse::Left || drag_type == DragType::None) break;
+			drag_type = DragType::None;
 
-			if (layer != nullptr)
+			Int2 position;
+			Layer* layer = controller->get_layer();
+			if (layer == nullptr || not try_get_mouse_position(position)) break;
+
+			if (selected_tool == ToolType::TileRemoval)
 			{
 				Int2 min = position.min(drag_origin);
 				Int2 max = position.max(drag_origin) + Int2(1);
 				layer->erase(min, max);
 			}
-		}
 
-		drag_type = DragType::None;
+			break;
+		}
+		default: break;
 	}
 }
 
@@ -490,6 +494,14 @@ void Cursor::execute_mouse(Int2 position)
 		case ToolType::Mouse:
 		{
 			if (button) layer_view->set_point(mouse_percent, last_mouse_point);
+
+			if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
+			{
+				Layer* layer = controller->get_layer();
+				TileTag tile = layer->get(position);
+				if (tile.type == TileType::Wire) layer->get_engine().toggle_wire_strong_powered(tile.index);
+			}
+
 			return;
 		}
 		case ToolType::WirePlacement:

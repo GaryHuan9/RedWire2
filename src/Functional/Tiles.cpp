@@ -555,7 +555,10 @@ void Gate::draw(DrawContext& context, Int2 position, Index index, const Layer& l
 	static constexpr uint32_t ColorTransistor = make_color(62, 173, 95);
 	static constexpr uint32_t ColorInverter = make_color(59, 73, 255);
 	static constexpr uint32_t ColorDisabled = make_color(18, 17, 24);
-	static constexpr float DisabledSize = 0.5f;
+
+	//Draw a little square to indicate rotation
+	constexpr float Extend = 0.15f;
+	constexpr float Offset = 0.5f - Extend;
 
 	const auto& gate = layer.get_list<Gate>()[index];
 	uint32_t color = gate.type == Type::Transistor ? ColorTransistor : ColorInverter;
@@ -566,9 +569,9 @@ void Gate::draw(DrawContext& context, Int2 position, Index index, const Layer& l
 
 	Int2 direction = gate.rotation.get_direction();
 	Float2 origin = corner0 + Float2(0.5f);
-	Float2 center = origin + Float2(direction) * (0.5f - DisabledSize / 2.0f);
-	corner0 = center - Float2(DisabledSize / 2.0f);
-	corner1 = corner0 + Float2(DisabledSize);
+	Float2 center = origin + Float2(direction) * Offset;
+	corner0 = center - Float2(Extend);
+	corner1 = center + Float2(Extend);
 
 	context.emplace_quad(corner0, corner1, ColorDisabled);
 }

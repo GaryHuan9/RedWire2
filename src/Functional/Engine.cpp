@@ -13,7 +13,6 @@ void Engine::register_wire(Index index)
 
 	assert(index < states.size());
 	states[index] = 0;
-	states_next[index] = 0;
 }
 
 void Engine::register_gate(Index index, Index output, bool transistor, const std::span<Index>& inputs)
@@ -39,31 +38,41 @@ void Engine::unregister_gate(Index index)
 	gates_output[index] = Index();
 }
 
+void Engine::toggle_wire_strong_powered(Index index)
+{
+	states[index] ^= 0b10;
+}
+
 void Engine::tick(uint32_t count)
 {
 	for (size_t i = 0; i < count; ++i)
 	{
+		for (size_t j = 0; j < states.size(); ++j)
+		{
+			states_next[j] = states[j] & 0b10;
+		}
+
 		for (size_t j = 0; j < gates_output.size(); ++j)
 		{
 			Index output = gates_output[j];
-			if (output == Index()) continue;
+			if (not output.valid()) continue;
 
 			bool transistor = gates_transistor[j] != 0;
-			uint8_t result = 1;
+			uint8_t powered = 1;
 
 			for (Index input : gates_inputs[j])
 			{
-				uint8_t value = input == Index() ? 1 : states[input];
+				uint8_t state = 1;
+				if (input.valid()) state = states[input] != 0;
 
-				if (transistor) result &= value;
-				else result ^= value;
+				if (transistor) powered &= state;
+				else powered ^= state;
 			}
 
-			states_next[output] |= result;
+			states_next[output] |= powered;
 		}
 
 		std::swap(states, states_next);
-		std::fill(states_next.begin(), states_next.end(), 0);
 	}
 }
 
