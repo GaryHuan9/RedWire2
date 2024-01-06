@@ -265,7 +265,7 @@ void DrawContext::clip(Float2 min_position, Float2 max_position) const
 	{
 		//Note that scale and origin are in clip space
 		position = position * scale + origin;
-		position = position * Float2(0.5f, -0.5f) + Float2(0.5f);
+		position = position * 0.5f + Float2(0.5f);
 		position = position.max(Float2(0.0f)).min(Float2(1.0f));
 		return position;
 	};

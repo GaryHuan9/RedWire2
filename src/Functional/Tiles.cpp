@@ -10,9 +10,9 @@
 namespace rw
 {
 
-static constexpr std::array<Int2, 4> FourDirections = { Int2(1, 0), Int2(-1, 0), Int2(0, 1), Int2(0, -1) };
-static constexpr std::span<const Int2> HorizontalDirections(FourDirections.begin(), FourDirections.begin() + 2);
-static constexpr std::span<const Int2> VerticalDirections(FourDirections.begin() + 2, FourDirections.end());
+static constexpr std::array<Int2, 4> FourDirections = { Int2(1, 0), Int2(0, -1), Int2(-1, 0), Int2(0, 1) };
+static constexpr std::array<Int2, 2> HorizontalDirections = { Int2(1, 0), Int2(-1, 0) };
+static constexpr std::array<Int2, 2> VerticalDirections = { Int2(0, 1), Int2(0, -1) };
 
 static uint32_t get_new_color()
 {
@@ -27,13 +27,6 @@ const char* TileType::to_string() const
 	return Strings[get_value()];
 }
 
-TileRotation TileRotation::get_next() const
-{
-	static constexpr std::array<TileRotation, 4> NextValues = { TileRotation::South, TileRotation::North,
-	                                                            TileRotation::West, TileRotation::East };
-	return NextValues[get_value()];
-}
-
 Int2 TileRotation::get_direction() const
 {
 	return FourDirections[get_value()];
@@ -41,7 +34,7 @@ Int2 TileRotation::get_direction() const
 
 const char* TileRotation::to_string() const
 {
-	static constexpr std::array<const char*, 5> Strings = { "East", "West", "South", "North" };
+	static constexpr std::array<const char*, 5> Strings = { "East", "South", "West", "North" };
 	return Strings[get_value()];
 }
 

@@ -24,7 +24,7 @@ public:
 
 	constexpr TileType(Value value = Value::None) : data(value) // NOLINT(*-explicit-constructor)
 	{
-		assert(static_cast<unsigned int>(value) < 5);
+		assert(static_cast<unsigned int>(value) < Count);
 	}
 
 	[[nodiscard]] constexpr Value get_value() const { return data; }
@@ -48,6 +48,8 @@ public:
 		return reader;
 	}
 
+	static constexpr uint32_t Count = 5;
+
 private:
 	Value data;
 };
@@ -58,19 +60,38 @@ public:
 	enum Value : uint8_t
 	{
 		East,
-		West,
 		South,
+		West,
 		North
 	};
 
 	constexpr TileRotation(Value value = Value::East) : data(value) // NOLINT(*-explicit-constructor)
 	{
-		assert(static_cast<unsigned int>(value) < 4);
+		assert(static_cast<unsigned int>(value) < Count);
 	}
 
 	[[nodiscard]] bool vertical() const { return data == South || data == North; }
 
-	[[nodiscard]] TileRotation get_next() const;
+	/**
+	 * Rotates this TileRotation based on a delta defined by two other rotations, going from one to the other.
+	 */
+	[[nodiscard]]
+	TileRotation rotate(TileRotation begin, TileRotation end) const
+	{
+		uint32_t delta = end.get_value() - begin.get_value();
+		uint32_t rotated = (get_value() + delta) % Count;
+		return { static_cast<Value>(rotated) };
+	}
+
+	/**
+	 * Gets the next rotation in clockwise order.
+	 */
+	[[nodiscard]]
+	TileRotation get_next() const
+	{
+		uint32_t next = (get_value() + 1) % Count;
+		return { static_cast<Value>(next) };
+	}
 
 	[[nodiscard]] Int2 get_direction() const;
 
@@ -94,6 +115,8 @@ public:
 		rotation = value;
 		return reader;
 	}
+
+	static constexpr uint32_t Count = 4;
 
 private:
 	Value data;

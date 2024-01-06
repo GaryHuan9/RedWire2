@@ -167,11 +167,13 @@ void LayerView::input_event(const sf::Event& event)
 	set_aspect_ratio(window_size.x / window_size.y);
 }
 
-void LayerView::get_scale_origin(float& scale, Float2& origin) const
+void LayerView::get_scale_origin(Float2& scale, Float2& origin) const
 {
-	auto window_size = Float2(window.getSize());
-	scale = window_size.x / 2.0f / extend.x; //This factor should be the same on both axes, using X here
-	origin = window_size / 2.0f - center * scale;
+	Float2 window_extend = Float2(window.getSize()) / 2.0f;
+	float scale_x = window_extend.x / extend.x;
+
+	scale = Float2(scale_x, -scale_x);
+	origin = window_extend - center * scale;
 }
 
 void LayerView::update_zoom()
@@ -189,7 +191,7 @@ void LayerView::update_zoom()
 
 void LayerView::update_grid()
 {
-	float scale;
+	Float2 scale;
 	Float2 origin;
 	get_scale_origin(scale, origin);
 
@@ -211,7 +213,7 @@ void LayerView::update_grid()
 
 		for (int32_t int_x = int_min.x; int_x <= int_max.x; int_x += gap)
 		{
-			float x = std::fma(static_cast<float>(int_x), scale, origin.x);
+			float x = std::fma(static_cast<float>(int_x), scale.x, origin.x);
 
 			vertices.emplace_back(sf::Vector2f(x, 0.0f), color);
 			vertices.emplace_back(sf::Vector2f(x, window_size.y), color);
@@ -219,7 +221,7 @@ void LayerView::update_grid()
 
 		for (int32_t int_y = int_min.y; int_y <= int_max.y; int_y += gap)
 		{
-			float y = std::fma(static_cast<float>(int_y), scale, origin.y);
+			float y = std::fma(static_cast<float>(int_y), scale.y, origin.y);
 
 			vertices.emplace_back(sf::Vector2f(0.0f, y), color);
 			vertices.emplace_back(sf::Vector2f(window_size.x, y), color);
@@ -236,13 +238,13 @@ void LayerView::update_grid()
 
 void LayerView::update_render_states()
 {
-	float scale;
+	Float2 scale;
 	Float2 origin;
 	get_scale_origin(scale, origin);
 
 	sf::Transform transform;
 	transform.translate(origin.x, origin.y);
-	transform.scale(scale, scale);
+	transform.scale(scale.x, scale.y);
 	render_states->transform = transform;
 }
 
@@ -253,7 +255,7 @@ void LayerView::draw_grid() const
 
 void LayerView::draw_layer(const Layer& layer) const
 {
-	Float2 scale = Float2(1.0f, -1.0f) / extend;
+	Float2 scale = Float2(1.0f) / extend;
 	Float2 origin = -center * scale;
 	draw_context->set_view(scale, origin);
 
@@ -278,9 +280,10 @@ void Cursor::update()
 {
 	Layer* layer = controller->get_layer();
 	Float2 mouse(sf::Mouse::getPosition(window));
+	mouse_percent = mouse / Float2(window.getSize());
+	mouse_percent.y = 1.0f - mouse_percent.y;
 
 	last_mouse_point = mouse_point;
-	mouse_percent = mouse / Float2(window.getSize());
 	recalculate_mouse_point();
 
 	if (layer == nullptr)
@@ -424,8 +427,8 @@ void Cursor::execute_key()
 	Int2 view_input;
 	if (sf::Keyboard::isKeyPressed(sf::Keyboard::W)) view_input += Int2(0, 1);
 	if (sf::Keyboard::isKeyPressed(sf::Keyboard::S)) view_input += Int2(0, -1);
-	if (sf::Keyboard::isKeyPressed(sf::Keyboard::A)) view_input += Int2(1, 0);
-	if (sf::Keyboard::isKeyPressed(sf::Keyboard::D)) view_input += Int2(-1, 0);
+	if (sf::Keyboard::isKeyPressed(sf::Keyboard::A)) view_input += Int2(-1, 0);
+	if (sf::Keyboard::isKeyPressed(sf::Keyboard::D)) view_input += Int2(1, 0);
 
 	if (view_input == Int2(0)) return;
 	float delta_time = Timer::as_float(application.get_timer().frame_time());
@@ -435,7 +438,7 @@ void Cursor::execute_key()
 	//Move based on relative screen percentage
 	Float2 reference = layer_view->get_point(Float2(0.0f));
 	delta.y *= layer_view->get_aspect_ratio();
-	layer_view->set_point(delta, reference);
+	layer_view->set_point(-delta, reference);
 	recalculate_mouse_point();
 }
 
@@ -729,61 +732,65 @@ void Cursor::draw_rectangle(Float2 center, Float2 size, uint32_t fill_color, flo
 }
 
 Cursor::ClipBuffer::ClipBuffer(const Layer& source, Bounds bounds) :
-	layer(std::make_unique<Layer>(source.copy(bounds))),
+	source(std::make_unique<Layer>(source.copy(bounds))),
 	bounds(bounds), rotation(TileRotation::East) {}
 
-void Cursor::ClipBuffer::paste(Layer& destination, Int2 position) const
+void Cursor::ClipBuffer::paste(Layer& layer, Int2 position) const
 {
+	//Precalculate transformation parameters
+	Int2 one_less = size() - Int2(1);
+	Int2 multiplier = Int2(1);
+
+	if (rotation == TileRotation::West || rotation == TileRotation::North)
+	{
+		multiplier.x = -1;
+		position.x += one_less.x;
+	}
+
+	if (rotation == TileRotation::West || rotation == TileRotation::South)
+	{
+		multiplier.y = -1;
+		position.y += one_less.y;
+	}
+
+	//Insert new tiles to destination
 	for (Int2 current : bounds)
 	{
-		TileTag tile = layer->get(current);
+		//Skip empty tiles
+		TileTag tile = source->get(current);
+		if (tile.type == TileType::None) continue;
+
+		//Transform current position based on rotation
 		Int2 offset = current - bounds.get_min();
+		if (rotation.vertical()) std::swap(offset.x, offset.y);
+		current = offset * multiplier + position;
 
-		switch (rotation.get_value())
-		{
-			case TileRotation::East:break;
-			case TileRotation::West:
-			{
-				offset = size() - offset - Int2(1);
-				break;
-			}
-			case TileRotation::South:
-			{
-				std::swap(offset.x, offset.y);
-				offset.x = size().x - offset.x - 1;
-				break;
-			}
-			case TileRotation::North:
-			{
-				std::swap(offset.x, offset.y);
-				offset.y = size().y - offset.y - 1;
-				break;
-			}
-		}
+		if (not layer.has(current, TileType::None)) continue;
 
-		current = position + offset;
-
-		if (tile.type == TileType::None || not destination.has(current, TileType::None)) continue;
-
+		//Insert tile
 		switch (tile.type.get_value())
 		{
 			case TileType::Wire:
 			{
-				Wire::insert(destination, current);
+				Wire::insert(layer, current);
 				break;
 			}
 			case TileType::Bridge:
 			{
-				Bridge::insert(destination, current);
+				Bridge::insert(layer, current);
 				break;
 			}
 			case TileType::Gate:
 			{
-				const Gate& gate = layer->get_list<Gate>()[tile.index];
-				Gate::insert(destination, current, gate.get_type(), gate.get_rotation());
+				const Gate& gate = source->get_list<Gate>()[tile.index];
+
+				TileRotation gate_rotation = gate.get_rotation();
+				gate_rotation = gate_rotation.rotate(TileRotation::East, rotation);
+				Gate::insert(layer, current, gate.get_type(), gate_rotation);
+
 				break;
 			}
-			default: throw std::domain_error("Bad TileType.");
+			default: throw std::domain_error("Unrecognized TileType.");
 		}
 	}
 }

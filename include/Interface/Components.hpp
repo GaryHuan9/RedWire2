@@ -120,7 +120,7 @@ public:
 	}
 
 private:
-	void get_scale_origin(float& scale, Float2& origin) const;
+	void get_scale_origin(Float2& scale, Float2& origin) const;
 
 	void mark_dirty() { dirty = true; }
 
@@ -256,11 +256,11 @@ public:
 
 	void set_rotation(TileRotation new_rotation) { rotation = new_rotation; }
 
-	void paste(Layer& destination, Int2 position) const;
+	void paste(Layer& layer, Int2 position) const;
 	void draw(DrawContext& context, Int2 position) const;
 
 private:
-	std::unique_ptr<Layer> layer;
+	std::unique_ptr<Layer> source;
 	const Bounds bounds;
 	TileRotation rotation;
 };
