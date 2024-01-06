@@ -79,19 +79,28 @@ void Controller::update_interface()
 	ImGui::SeparatorText("Serialization");
 	ImGui::InputText("File Name", path_buffer.data(), path_buffer.size());
 	fs::path path = fs::path("saves") / std::string(path_buffer.data());
+	imgui_tooltip("Name of the file to save as or load from");
 
 	if (selected_action == ActionType::None)
 	{
-		if (ImGui::Button("Save")) selected_action = ActionType::Save;
+		bool has_file = fs::is_regular_file(path);
+
+		ImGui::BeginDisabled(fs::is_directory(path));
+		if (ImGui::Button(has_file ? "Overwrite" : "Save")) selected_action = ActionType::Save;
+		imgui_tooltip("Save current Board as a file on disk. May overwrite previous saves");
+
+		ImGui::EndDisabled();
 
 		ImGui::SameLine();
-		ImGui::BeginDisabled(not fs::is_regular_file(path));
+		ImGui::BeginDisabled(not has_file);
 		if (ImGui::Button("Load")) selected_action = ActionType::Load;
+		imgui_tooltip("Load a file from disk and replace (i.e. erase) the current board");
 
 		ImGui::EndDisabled();
 
 		ImGui::SameLine();
 		if (ImGui::Button("New")) selected_action = ActionType::New;
+		imgui_tooltip("Erase everything on the current board and starts from scratch");
 	}
 	else
 	{
@@ -288,7 +297,6 @@ void Cursor::update()
 
 	if (application.handle_keyboard()) execute_key();
 	if (Int2 position; try_get_mouse_position(position)) execute_mouse(position);
-
 }
 
 void Cursor::input_event(const sf::Event& event)
@@ -385,6 +393,27 @@ void Cursor::update_interface()
 			int clip = static_cast<int>(selected_clip);
 			ImGui::SliderInt("Clipboard Type", &clip, 0, ClipNames.size() - 1, ClipNames[clip]);
 			selected_clip = static_cast<ClipType>(clip);
+
+			imgui_tooltip(
+				"Currently selected clipboard tool. Drag over area to highlight tiles to copy."
+				"Can also be switched with button shortcuts: Cut = [X], Copy = [C], Paste = [V]"
+			);
+
+			if (selected_buffer != nullptr)
+			{
+				if (selected_clip == ClipType::Paste)
+				{
+					TileRotation rotation = selected_buffer->get_rotation();
+					int value = rotation.get_value();
+					ImGui::SliderInt("Rotation", &value, 0, 3, rotation.to_string());
+					selected_buffer->set_rotation(static_cast<TileRotation::Value>(value));
+					imgui_tooltip("Rotation of the pasting orientation. Use [R] to quickly switch to the next rotation.");
+				}
+
+				Int2 size = selected_buffer->size();
+				ImGui::Text("Copied buffer: %ux%u", size.x, size.y);
+			}
+			else ImGui::TextUnformatted("No copied clipboard buffer");
 		}
 		default: break;
 	}
@@ -536,8 +565,14 @@ void Cursor::execute_key_event(const sf::Event& event)
 		}
 		case sf::Keyboard::R:
 		{
-			if (selected_tool != ToolType::PortPlacement || selected_port == PortType::Bridge) break;
-			selected_rotation = selected_rotation.get_next();
+			if (selected_tool == ToolType::PortPlacement && selected_port != PortType::Bridge) selected_rotation = selected_rotation.get_next();
+
+			if (selected_tool == ToolType::Clipboard && selected_clip == ClipType::Paste && selected_buffer != nullptr)
+			{
+				TileRotation rotation = selected_buffer->get_rotation();
+				selected_buffer->set_rotation(rotation.get_next());
+			}
+
 			break;
 		}
 		case sf::Keyboard::Num1:
@@ -695,20 +730,38 @@ void Cursor::draw_rectangle(Float2 center, Float2 size, uint32_t fill_color, flo
 
 Cursor::ClipBuffer::ClipBuffer(const Layer& source, Bounds bounds) :
 	layer(std::make_unique<Layer>(source.copy(bounds))),
-	bounds(bounds) {}
-
-Int2 Cursor::ClipBuffer::get_position(Float2 center) const
-{
-	Float2 offset = Float2(size() - Int2(1)) / 2.0;
-	return Float2::floor(center - offset);
-}
+	bounds(bounds), rotation(TileRotation::East) {}
 
 void Cursor::ClipBuffer::paste(Layer& destination, Int2 position) const
 {
 	for (Int2 current : bounds)
 	{
 		TileTag tile = layer->get(current);
-		current += position - bounds.get_min();
+		Int2 offset = current - bounds.get_min();
+
+		switch (rotation.get_value())
+		{
+			case TileRotation::East:break;
+			case TileRotation::West:
+			{
+				offset = size() - offset - Int2(1);
+				break;
+			}
+			case TileRotation::South:
+			{
+				std::swap(offset.x, offset.y);
+				offset.x = size().x - offset.x - 1;
+				break;
+			}
+			case TileRotation::North:
+			{
+				std::swap(offset.x, offset.y);
+				offset.y = size().y - offset.y - 1;
+				break;
+			}
+		}
+
+		current = position + offset;
 
 		if (tile.type == TileType::None || not destination.has(current, TileType::None)) continue;
 

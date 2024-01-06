@@ -198,10 +198,7 @@ private:
 
 	class ClipBuffer;
 
-	void recalculate_mouse_point()
-	{
-		mouse_point = layer_view->get_point(mouse_percent);
-	}
+	void recalculate_mouse_point() { mouse_point = layer_view->get_point(mouse_percent); }
 
 	void update_interface();
 
@@ -242,9 +239,22 @@ class Cursor::ClipBuffer
 public:
 	ClipBuffer(const Layer& source, Bounds bounds);
 
-	[[nodiscard]] Int2 size() const { return bounds.size(); }
+	[[nodiscard]] Int2 size() const
+	{
+		Int2 result = bounds.size();
+		if (rotation.vertical()) std::swap(result.x, result.y);
+		return result;
+	}
 
-	[[nodiscard]] Int2 get_position(Float2 center) const;
+	[[nodiscard]] TileRotation get_rotation() const { return rotation; }
+
+	[[nodiscard]] Int2 get_position(Float2 center) const
+	{
+		Float2 offset = Float2(size() - Int2(1)) / 2.0;
+		return Float2::floor(center - offset);
+	}
+
+	void set_rotation(TileRotation new_rotation) { rotation = new_rotation; }
 
 	void paste(Layer& destination, Int2 position) const;
 	void draw(DrawContext& context, Int2 position) const;
@@ -252,6 +262,7 @@ public:
 private:
 	std::unique_ptr<Layer> layer;
 	const Bounds bounds;
+	TileRotation rotation;
 };
 
 class TickControl : public Component

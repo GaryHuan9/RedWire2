@@ -68,6 +68,8 @@ public:
 		assert(static_cast<unsigned int>(value) < 4);
 	}
 
+	[[nodiscard]] bool vertical() const { return data == South || data == North; }
+
 	[[nodiscard]] TileRotation get_next() const;
 
 	[[nodiscard]] Int2 get_direction() const;
