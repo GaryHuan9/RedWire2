@@ -9,14 +9,21 @@ namespace rw
 {
 
 template<class T, class Allocator = std::allocator<T>>
-class RecyclingList : NonCopyable
+class RecyclingList
 {
 public:
 	RecyclingList() = default;
-
 	~RecyclingList();
 
+	RecyclingList(const RecyclingList& other) noexcept;
+
 	RecyclingList(RecyclingList&& other) noexcept : RecyclingList() { swap(*this, other); }
+
+	RecyclingList& operator=(RecyclingList other) noexcept
+	{
+		swap(*this, other);
+		return *this;
+	}
 
 	RecyclingList& operator=(RecyclingList&& other) noexcept
 	{
@@ -109,6 +116,22 @@ private:
 	Allocator allocator;
 	std::map<uint32_t, uint32_t> ranges; //Maps from the end of a range (exclusive) to the start of a range (inclusive)
 };
+
+template<class T, class Allocator>
+RecyclingList<T, Allocator>::RecyclingList(const RecyclingList& other) noexcept :
+	count(other.count), capacity(other.capacity), allocator(other.allocator), ranges(other.ranges)
+{
+	items = allocator.allocate(capacity);
+	T* source = other.items;
+	T* destination = items;
+
+	auto copy_range = [source, destination](uint32_t start, uint32_t end)
+	{
+		std::uninitialized_copy_n(source + start, end - start, destination + start);
+	};
+
+	other.for_each_range(copy_range);
+}
 
 template<class T, class Allocator>
 RecyclingList<T, Allocator>::~RecyclingList()

@@ -151,20 +151,22 @@ private:
 class DrawContext
 {
 public:
-	DrawContext(sf::Shader* shader_quad, sf::Shader* shader_wire);
+	DrawContext(std::unique_ptr<sf::Shader>&& shader_quad, std::unique_ptr<sf::Shader>&& shader_wire);
 
 	void emplace_quad(Float2 corner0, Float2 corner1, uint32_t color);
 	void emplace_wire(Float2 corner0, Float2 corner1, Index wire_index);
 
 	[[nodiscard]] VertexBuffer flush_buffer(bool quad);
 
-	void draw(bool quad, const VertexBuffer& buffer) const;
+	void set_view(Float2 new_scale, Float2 new_origin);
+	void set_wire_states(const void* data, size_t size);
 
-	void update_wire_states(const void* data, size_t size);
+	void clip(Float2 min_position, Float2 max_position) const;
+	void draw(bool quad, const VertexBuffer& buffer) const;
 
 	void clear();
 
-public:
+private:
 	struct QuadVertex
 	{
 		Float2 position;
@@ -177,12 +179,15 @@ public:
 		uint32_t index{};
 	};
 
+	Float2 scale;
+	Float2 origin;
+
+	std::unique_ptr<sf::Shader> shader_quad;
+	std::unique_ptr<sf::Shader> shader_wire;
+	DataBuffer wire_states_buffer;
+
 	std::vector<QuadVertex> vertices_quad;
 	std::vector<WireVertex> vertices_wire;
-
-	sf::Shader* shader_quad;
-	sf::Shader* shader_wire;
-	DataBuffer wire_states_buffer;
 };
 
 } // rw

@@ -207,6 +207,10 @@ public:
 
 	Gate(Type type, TileRotation rotation);
 
+	[[nodiscard]] Type get_type() const { return type; }
+
+	[[nodiscard]] TileRotation get_rotation() const { return rotation; }
+
 	static void insert(Layer& layer, Int2 position, Gate::Type type, TileRotation rotation);
 
 	static void erase(Layer& layer, Int2 position);

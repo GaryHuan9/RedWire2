@@ -145,8 +145,6 @@ private:
 	float zoom_percent{};
 
 	std::vector<sf::Vertex> vertices;
-	std::unique_ptr<sf::Shader> shader_quad;
-	std::unique_ptr<sf::Shader> shader_wire;
 	std::unique_ptr<DrawContext> draw_context;
 	std::unique_ptr<sf::RenderStates> render_states;
 
@@ -172,7 +170,8 @@ private:
 		Mouse,
 		WirePlacement,
 		PortPlacement,
-		TileRemoval
+		TileRemoval,
+		Clipboard
 	};
 
 	enum class PortType : uint8_t
@@ -180,6 +179,13 @@ private:
 		Transistor,
 		Inverter,
 		Bridge
+	};
+
+	enum class ClipType : uint8_t
+	{
+		Cut,
+		Copy,
+		Paste
 	};
 
 	enum class DragType : uint8_t
@@ -190,12 +196,20 @@ private:
 		Horizontal
 	};
 
+	class ClipBuffer;
+
+	void recalculate_mouse_point()
+	{
+		mouse_point = layer_view->get_point(mouse_percent);
+	}
+
 	void update_interface();
-	void update_key_event(const sf::Event& event);
-	void update_mouse_event(const sf::Event& event);
 
 	void execute_key();
 	void execute_mouse(Int2 position);
+	void execute_key_event(const sf::Event& event);
+	void execute_mouse_event(const sf::Event& event);
+
 	Int2 place_wire(Int2 position);
 	Int2 place_port(Int2 position);
 
@@ -205,18 +219,39 @@ private:
 	LayerView* layer_view{};
 
 	Float2 mouse_percent;
+	Float2 mouse_point;
 	Float2 last_mouse_point;
 
 	float selected_pan_sensitivity = 0.5f;
 	ToolType selected_tool = ToolType::Mouse;
 	PortType selected_port = PortType::Transistor;
+	ClipType selected_clip = ClipType::Copy;
+
 	bool selected_auto_bridge = false;
 	TileRotation selected_rotation;
+	std::unique_ptr<ClipBuffer> selected_buffer;
 
 	DragType drag_type = DragType::None;
 	Int2 drag_origin;
 
 	std::unique_ptr<sf::RectangleShape> rectangle;
+};
+
+class Cursor::ClipBuffer
+{
+public:
+	ClipBuffer(const Layer& source, Bounds bounds);
+
+	[[nodiscard]] Int2 size() const { return bounds.size(); }
+
+	[[nodiscard]] Int2 get_position(Float2 center) const;
+
+	void paste(Layer& destination, Int2 position) const;
+	void draw(DrawContext& context, Int2 position) const;
+
+private:
+	std::unique_ptr<Layer> layer;
+	const Bounds bounds;
 };
 
 class TickControl : public Component

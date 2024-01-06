@@ -31,8 +31,10 @@ public:
 	using DataTypes = TypeSet<Wire, Bridge, Gate>;
 	using ListsType = DataTypes::Wrap<RecyclingList>;
 
-	explicit Layer(bool raw = true);
+	Layer();
 	~Layer();
+
+	Layer(Layer&& other) = default;
 
 	template<class T>
 	[[nodiscard]] const RecyclingList<T>& get_list() const { return lists->get<T>(); }
@@ -50,7 +52,8 @@ public:
 
 	void set(Int2 position, TileTag tile);
 
-	void erase(Int2 min_position, Int2 max_position);
+	void erase(Bounds bounds);
+	Layer copy(Bounds bounds) const;
 
 	friend BinaryWriter& operator<<(BinaryWriter& writer, const Layer& layer);
 	friend BinaryReader& operator>>(BinaryReader& reader, Layer& layer);
@@ -59,9 +62,9 @@ private:
 	class Chunk;
 
 	template<class Action>
-	void for_each_chunk(Action action, Int2 min_position, Int2 max_position) const;
+	void for_each_chunk(Action action, Bounds bounds) const;
 
-	static void get_chunk_bounds(Int2 min_position, Int2 max_position, Int2& min_chunk, Int2& max_chunk);
+	static Bounds to_chunk_space(Bounds bounds); //From world / tile space to chunk space
 
 	std::unordered_map<Int2, std::unique_ptr<Chunk>> chunks;
 	std::unique_ptr<ListsType> lists;
@@ -71,7 +74,9 @@ private:
 class Layer::Chunk
 {
 public:
-	Chunk(const Layer& layer, Int2 chunk_position);
+	explicit Chunk(Int2 chunk_position);
+
+	Chunk(const Chunk& other);
 
 	[[nodiscard]] TileTag get(Int2 tile_index) const;
 
@@ -83,7 +88,7 @@ public:
 
 	void mark_dirty();
 
-	void update_draw_buffer(DrawContext& context);
+	void update_draw_buffer(DrawContext& context, const Layer& layer);
 
 	void write(BinaryWriter& writer) const;
 	void read(BinaryReader& reader);
@@ -92,8 +97,7 @@ public:
 
 	static Int2 get_local_position(Int2 position) { return { position.x & (Chunk::Size - 1), position.y & (Chunk::Size - 1) }; }
 
-	const Layer& layer;
-	const Int2 chunk_position; //Note that this is the chunk position in tile space
+	const Int2 chunk_position; //Note that this is the position in chunk space (i.e. not multiplied with size)
 
 	static constexpr uint32_t SizeLog2 = 5;
 	static constexpr uint32_t Size = 1u << SizeLog2;

@@ -13,12 +13,12 @@ private:
 	using F = std::conditional_t<sizeof(T) <= sizeof(float), float, double>;
 
 public:
-	constexpr Vector2() : x{}, y{} {}
+	constexpr Vector2() = default;
 
 	constexpr Vector2(T x, T y) : x(x), y(y) {}
 
 	template<class U>
-	constexpr Vector2(U x, U y) : x(static_cast<T>(x)), y(static_cast<T>(y)) {}
+	constexpr Vector2(U x, U y) : Vector2(static_cast<T>(x), static_cast<T>(y)) {}
 
 	constexpr explicit Vector2(T value) : Vector2(value, value) {}
 
@@ -74,17 +74,17 @@ public:
 
 	constexpr V operator/(T value) const { return V(x / value, y / value); }
 
-	constexpr V operator+=(V value) { return V(x += value.x, y += value.y); }
+	constexpr V& operator+=(V value) { return *this = (*this + value); }
 
-	constexpr V operator-=(V value) { return V(x -= value.x, y -= value.y); }
+	constexpr V& operator-=(V value) { return *this = (*this - value); }
 
-	constexpr V operator*=(V value) { return V(x *= value.x, y *= value.y); }
+	constexpr V& operator*=(V value) { return *this = (*this * value); }
 
-	constexpr V operator/=(V value) { return V(x /= value.x, y /= value.y); }
+	constexpr V& operator/=(V value) { return *this = (*this / value); }
 
-	constexpr V operator*=(T value) { return V(x *= value, y *= value); }
+	constexpr V& operator*=(T value) { return *this = (*this * value); }
 
-	constexpr V operator/=(T value) { return V(x /= value, y /= value); }
+	constexpr V& operator/=(T value) { return *this = (*this / value); }
 
 	static constexpr Int2 ceil(V value) { return Int2(std::ceil(value.x), std::ceil(value.y)); }
 
@@ -104,8 +104,8 @@ public:
 		return reader;
 	}
 
-	T x;
-	T y;
+	T x{};
+	T y{};
 
 private:
 	void write(BinaryWriter& writer) const;
@@ -117,6 +117,84 @@ inline constexpr Int2 Int2::ceil(Int2 value) { return value; }
 
 template<>
 inline constexpr Int2 Int2::floor(Int2 value) { return value; }
+
+class Bounds
+{
+public:
+	class Iterator;
+
+	Bounds() = default;
+
+	Bounds(Int2 min, Int2 max) : min(min), max(max) { assert(max >= min); }
+
+	explicit Bounds(Int2 min) : Bounds(min, min + Int2(1)) {}
+
+	Bounds(Float2 min, Float2 max) : Bounds(Float2::floor(min), Float2::ceil(max)) {}
+
+	[[nodiscard]] Int2 get_min() const { return min; }
+
+	[[nodiscard]] Int2 get_max() const { return max; }
+
+	[[nodiscard]] Int2 size() const { return max - min; }
+
+	[[nodiscard]] Float2 extend() const { return Float2(size()) / 2.0f; }
+
+	[[nodiscard]] Float2 center() const { return Float2(min + max) / 2.0f; }
+
+	[[nodiscard]] bool contains(Int2 position) const { return min <= position && position < max; }
+
+	[[nodiscard]] Iterator begin() const;
+	[[nodiscard]] Iterator end() const;
+
+	static Bounds encapsulate(Int2 point0, Int2 point1)
+	{
+		Int2 min = point0.min(point1);
+		Int2 max = point0.max(point1);
+		return { min, max + Int2(1) };
+	}
+
+	Bounds operator+(Int2 value) const { return { min + value, max + value }; }
+
+	Bounds operator-(Int2 value) const { return { min - value, max - value }; }
+
+	Bounds& operator+=(Int2 value) { return *this = *this + value; }
+
+	Bounds& operator-=(Int2 value) { return *this = *this - value; }
+
+private:
+	Int2 min;
+	Int2 max;
+};
+
+class Bounds::Iterator
+{
+public:
+	Iterator(int32_t min_x, int32_t max_x, Int2 current) : min_x(min_x), max_x(max_x), current(current) {}
+
+	Int2 operator*() const { return current; }
+
+	Iterator& operator++()
+	{
+		if (++current.x == max_x)
+		{
+			current.x = min_x;
+			++current.y;
+		}
+
+		return *this;
+	}
+
+	bool operator==(Iterator other) const { return current == other.current; }
+
+private:
+	int32_t min_x;
+	int32_t max_x;
+	Int2 current;
+};
+
+inline Bounds::Iterator Bounds::begin() const { return { min.x, max.x, min }; }
+
+inline Bounds::Iterator Bounds::end() const { return { min.x, max.x, Int2(min.x, max.y) }; }
 
 class Index
 {

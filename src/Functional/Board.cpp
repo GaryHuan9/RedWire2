@@ -10,12 +10,7 @@ namespace rw
 
 Board::Board() = default;
 
-Layer::Layer(bool raw)
-{
-	if (raw) return;
-	lists = std::make_unique<ListsType>();
-	engine = std::make_unique<Engine>();
-}
+Layer::Layer() : lists(std::make_unique<ListsType>()), engine(std::make_unique<Engine>()) {}
 
 Layer::~Layer() = default;
 
@@ -37,13 +32,14 @@ bool Layer::has(Int2 position, TileType type) const
 
 void Layer::draw(DrawContext& context, Float2 min_position, Float2 max_position) const
 {
-	auto draw = [&context](Chunk& chunk)
+	auto draw = [&context, this](Chunk& chunk)
 	{
-		chunk.update_draw_buffer(context);
+		chunk.update_draw_buffer(context, *this);
 		chunk.draw(context);
 	};
 
-	for_each_chunk(draw, Float2::floor(min_position), Float2::ceil(max_position));
+	context.clip(min_position, max_position);
+	for_each_chunk(draw, Bounds(min_position, max_position));
 }
 
 void Layer::set(Int2 position, TileTag tile)
@@ -55,7 +51,7 @@ void Layer::set(Int2 position, TileTag tile)
 	{
 		if (tile.type == TileType::None) return;
 
-		auto chunk = std::make_unique<Chunk>(*this, chunk_position);
+		auto chunk = std::make_unique<Chunk>(chunk_position);
 		auto pair = chunks.emplace(chunk_position, std::move(chunk));
 
 		assert(pair.second);
@@ -67,35 +63,50 @@ void Layer::set(Int2 position, TileTag tile)
 	if (not has_tiles) chunks.erase(iterator);
 }
 
-void Layer::erase(Int2 min_position, Int2 max_position)
+void Layer::erase(Bounds bounds)
 {
-	auto erase = [&](Chunk& chunk)
+	auto erase = [bounds, this](Chunk& chunk)
 	{
-		Int2 min = (min_position - chunk.chunk_position).max(Int2(0));
-		Int2 max = (max_position - chunk.chunk_position).min(Int2(static_cast<int32_t>(Chunk::Size)));
+		Int2 chunk_position = chunk.chunk_position * Chunk::Size;
+		Bounds local_bounds = bounds - chunk_position;
+
+		Int2 min = local_bounds.get_min().max(Int2(0));
+		Int2 max = local_bounds.get_max().min(Int2(static_cast<int32_t>(Chunk::Size)));
 		uint32_t remain = chunk.count();
 
-		for (int32_t y = min.y; y < max.y; ++y)
+		for (Int2 position : Bounds(min, max))
 		{
-			for (int32_t x = min.x; x < max.x; ++x)
-			{
-				Int2 current(x, y);
-				TileType type = chunk.get(current).type;
-				if (type == TileType::None) continue;
-				current += chunk.chunk_position;
+			TileType type = chunk.get(position).type;
+			if (type == TileType::None) continue;
+			position += chunk_position;
 
-				if (type == TileType::Wire) Wire::erase(*this, current);
-				else if (type == TileType::Bridge) Bridge::erase(*this, current);
-				else if (type == TileType::Gate) Gate::erase(*this, current);
-				else throw std::domain_error("Unrecognized TileType.");
+			if (type == TileType::Wire) Wire::erase(*this, position);
+			else if (type == TileType::Bridge) Bridge::erase(*this, position);
+			else if (type == TileType::Gate) Gate::erase(*this, position);
+			else throw std::domain_error("Unrecognized TileType.");
 
-				//Since empty chunks are automatically removed, check to see when all tiles are removed to avoid accessing a bad chunk
-				if (--remain == 0) return;
-			}
+			//Since empty chunks are automatically removed, check to see when all tiles are removed to avoid accessing a bad chunk
+			if (--remain == 0) break;
 		}
 	};
 
-	for_each_chunk(erase, min_position, max_position);
+	for_each_chunk(erase, bounds);
+}
+
+Layer Layer::copy(Bounds bounds) const
+{
+	Layer layer;
+
+	auto copy_chunk = [&layer](const Chunk& chunk)
+	{
+		auto pointer = std::make_unique<Chunk>(chunk);
+		layer.chunks.emplace(chunk.chunk_position, std::move(pointer));
+	};
+
+	for_each_chunk(copy_chunk, bounds);
+	layer.lists = std::make_unique<ListsType>(*lists);
+	layer.engine = std::make_unique<Engine>(*engine);
+	return layer;
 }
 
 BinaryWriter& operator<<(BinaryWriter& writer, const Layer& layer)
@@ -114,7 +125,6 @@ BinaryWriter& operator<<(BinaryWriter& writer, const Layer& layer)
 BinaryReader& operator>>(BinaryReader& reader, Layer& layer)
 {
 	assert(layer.chunks.empty());
-	assert(layer.engine == nullptr);
 
 	uint32_t size;
 	reader >> size;
@@ -124,7 +134,7 @@ BinaryReader& operator>>(BinaryReader& reader, Layer& layer)
 		Int2 position;
 		reader >> position;
 
-		auto pointer = std::make_unique<Layer::Chunk>(layer, position);
+		auto pointer = std::make_unique<Layer::Chunk>(position);
 		auto pair = layer.chunks.emplace(position, std::move(pointer));
 		assert(pair.second);
 
@@ -132,18 +142,15 @@ BinaryReader& operator>>(BinaryReader& reader, Layer& layer)
 		chunk->read(reader);
 	}
 
-	layer.lists = std::make_unique<Layer::ListsType>();
-	layer.engine = std::make_unique<Engine>();
 	return reader >> *layer.lists >> *layer.engine;
 }
 
 template<class Action>
-void Layer::for_each_chunk(Action action, Int2 min_position, Int2 max_position) const
+void Layer::for_each_chunk(Action action, Bounds bounds) const
 {
-	Int2 min_chunk, max_chunk;
-	get_chunk_bounds(min_position, max_position, min_chunk, max_chunk);
+	Bounds chunk_bounds = to_chunk_space(bounds);
 
-	if (chunks.size() < (max_chunk - min_chunk).product())
+	if (chunks.size() < chunk_bounds.size().product())
 	{
 		//Manual while loop to support removal of chunks during iteration
 		auto iterator = chunks.begin();
@@ -154,34 +161,37 @@ void Layer::for_each_chunk(Action action, Int2 min_position, Int2 max_position) 
 			Chunk* chunk = iterator->second.get();
 
 			++iterator;
-			if (min_chunk <= chunk_position && chunk_position < max_chunk) action(*chunk);
+			if (chunk_bounds.contains(chunk_position)) action(*chunk);
 		}
 	}
 	else
 	{
 		//Loop through all chunk positions
-		for (int32_t y = min_chunk.y; y < max_chunk.y; ++y)
+		for (Int2 position : chunk_bounds)
 		{
-			for (int32_t x = min_chunk.x; x < max_chunk.x; ++x)
-			{
-				auto iterator = chunks.find(Int2(x, y));
-				if (iterator == chunks.end()) continue;
-				action(*iterator->second);
-			}
+			auto iterator = chunks.find(position);
+			if (iterator == chunks.end()) continue;
+			action(*iterator->second);
 		}
 	}
 }
 
-void Layer::get_chunk_bounds(Int2 min_position, Int2 max_position, Int2& min_chunk, Int2& max_chunk)
+Bounds Layer::to_chunk_space(rw::Bounds bounds)
 {
-	min_chunk = Chunk::get_chunk_position(min_position);
-	max_chunk = Chunk::get_chunk_position(max_position - Int2(1)) + Int2(1); //Exclusive
+	return { Chunk::get_chunk_position(bounds.get_min()),
+	         Chunk::get_chunk_position(bounds.get_max() - Int2(1)) + Int2(1) }; //Exclusive max
 }
 
-Layer::Chunk::Chunk(const Layer& layer, Int2 chunk_position) :
-	layer(layer), chunk_position(chunk_position * Size),
+Layer::Chunk::Chunk(Int2 chunk_position) :
+	chunk_position(chunk_position),
 	tile_types(std::make_unique<decltype(tile_types)::element_type>()),
 	tile_indices(std::make_unique<decltype(tile_indices)::element_type>()) {}
+
+Layer::Chunk::Chunk(const Layer::Chunk& other) :
+	chunk_position(other.chunk_position), occupied_tiles(other.occupied_tiles),
+	tile_types(std::make_unique<decltype(tile_types)::element_type>(*other.tile_types)),
+	tile_indices(std::make_unique<decltype(tile_indices)::element_type>(*other.tile_indices)),
+	vertices_dirty(occupied_tiles > 0) {}
 
 TileTag Layer::Chunk::get(Int2 position) const
 {
@@ -224,44 +234,40 @@ bool Layer::Chunk::set(Int2 position, TileTag tile)
 
 void Layer::Chunk::mark_dirty() { vertices_dirty = true; }
 
-void Layer::Chunk::update_draw_buffer(DrawContext& context)
+void Layer::Chunk::update_draw_buffer(DrawContext& context, const Layer& layer)
 {
 	if (not vertices_dirty) return;
 	vertices_dirty = false;
 
-	for (int32_t y = 0; y < Size; ++y)
+	for (Int2 position : Bounds(Int2(0), Int2(static_cast<int32_t>(Size))))
 	{
-		for (int32_t x = 0; x < Size; ++x)
-		{
-			Int2 position(x, y);
-			TileTag tile = get(position);
-			position += chunk_position;
+		TileTag tile = get(position);
+		position += chunk_position * Size;
 
-			switch (tile.type.get_value())
+		switch (tile.type.get_value())
+		{
+			case TileType::Wire:
 			{
-				case TileType::Wire:
-				{
-					Wire::draw(context, position, tile.index, layer);
-					break;
-				}
-				case TileType::Bridge:
-				{
-					Bridge::draw(context, position, tile.index, layer);
-					break;
-				}
-				case TileType::Gate:
-				{
-					Gate::draw(context, position, tile.index, layer);
-					break;
-				}
-				case TileType::None: continue;
-				default:
-				{
-					Float2 corner0(position);
-					Float2 corner1 = corner0 + Float2(1.0f);
-					context.emplace_quad(corner0, corner1, 0xFF00FFFF);
-					break;
-				}
+				Wire::draw(context, position, tile.index, layer);
+				break;
+			}
+			case TileType::Bridge:
+			{
+				Bridge::draw(context, position, tile.index, layer);
+				break;
+			}
+			case TileType::Gate:
+			{
+				Gate::draw(context, position, tile.index, layer);
+				break;
+			}
+			case TileType::None: continue;
+			default:
+			{
+				Float2 corner0(position);
+				Float2 corner1 = corner0 + Float2(1.0f);
+				context.emplace_quad(corner0, corner1, 0xFF00FFFF);
+				break;
 			}
 		}
 	}
