@@ -441,108 +441,210 @@ void Cursor::execute_key()
 
 void Cursor::execute_mouse(Int2 position)
 {
+	if (selected_buffer != nullptr) position = selected_buffer->get_position(mouse_point);
 	bool button = sf::Mouse::isButtonPressed(sf::Mouse::Left);
 
 	//Update mouse drag properties
 	if (button)
 	{
+		Int2 size = selected_buffer == nullptr ? Int2(1) : selected_buffer->size();
+
 		if (drag_type == DragType::None)
 		{
 			drag_type = DragType::Origin;
 			drag_origin = position;
+			drag_position = position;
 		}
-		else if (drag_type == DragType::Origin && position != drag_origin)
+		else
 		{
 			Int2 delta = position - drag_origin;
 			delta = delta.max(-delta); //Absolute value
-			drag_type = delta.x > delta.y ? DragType::Horizontal : DragType::Vertical;
+
+			if (delta.x > delta.y)
+			{
+				drag_type = DragType::Horizontal;
+				drag_position = Int2(position.x, drag_origin.y);
+			}
+			else
+			{
+				drag_type = DragType::Vertical;
+				drag_position = Int2(drag_origin.x, position.y);
+			}
 		}
 	}
 
-	//Prepare for drawing
-	static constexpr uint32_t OutlineColor = make_color(230, 225, 240);
-	static constexpr uint32_t RemovalColor = make_color(220, 10, 30, 50);
-	static constexpr uint32_t PastingColor = make_color(210, 205, 220, 50);
+	//Execute mouse tool
+	if (selected_tool == ToolType::Mouse)
+	{
+		if (button)
+		{
+			layer_view->set_point(mouse_percent, last_mouse_point);
+			recalculate_mouse_point();
+		}
 
-	Bounds draw_bounds(position);
-	uint32_t fill_color = 0;
+		if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
+		{
+			Layer* layer = controller->get_layer();
+			TileTag tile = layer->get(position);
+			if (tile.type == TileType::Wire) layer->get_engine().toggle_wire_strong_powered(tile.index);
+		}
 
-	//Execute selected tool
+		return;
+	}
+
+	//Draw selected tool
 	switch (selected_tool)
 	{
-		case ToolType::Mouse:
-		{
-			if (button)
-			{
-				layer_view->set_point(mouse_percent, last_mouse_point);
-				recalculate_mouse_point();
-			}
-
-			if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
-			{
-				Layer* layer = controller->get_layer();
-				TileTag tile = layer->get(position);
-				if (tile.type == TileType::Wire) layer->get_engine().toggle_wire_strong_powered(tile.index);
-			}
-
-			return;
-		}
 		case ToolType::WirePlacement:
 		{
-			if (button) draw_bounds = Bounds(place_wire(position));
+			Bounds bounds(position);
+
+			if (button)
+			{
+				position = drag_position;
+				bounds = Bounds::encapsulate(drag_origin, position);
+			}
+
+			draw_selection(bounds, button, Wire::ColorUnpowered);
 			break;
 		}
 		case ToolType::PortPlacement:
 		{
-			if (button) draw_bounds = Bounds(place_port(position));
+			uint32_t color;
+
+			if (selected_port == PortType::Transistor) color = Gate::ColorTransistor;
+			else if (selected_port == PortType::Inverter) color = Gate::ColorInverter;
+			else if (selected_port == PortType::Bridge) color = Bridge::Color;
+			else throw std::domain_error("Bad PortType.");
+
+			if (button) position = drag_origin;
+			draw_selection(Bounds(position), button, color);
 
 			if (selected_port != PortType::Bridge)
 			{
-				//Draw a little square to indicate rotation
 				constexpr float Extend = 0.15f;
 				constexpr float Offset = 0.5f - Extend;
 
-				Float2 origin = draw_bounds.center();
-				Int2 direction = selected_rotation.get_direction();
-				Float2 center = origin + Float2(direction) * Offset;
-				draw_rectangle(center, Float2(Extend * 2), OutlineColor);
+				Float2 origin = Float2(position) + Float2(0.5f);
+				Float2 direction(selected_rotation.get_direction());
+				draw_rectangle(origin + direction * Offset, Float2(Extend), Gate::ColorDisabled);
 			}
 
 			break;
 		}
 		case ToolType::TileRemoval:
 		{
-			if (not button) break;
-			assert(drag_type != DragType::None);
-
-			draw_bounds = Bounds::encapsulate(drag_origin, position);
-			fill_color = RemovalColor;
+			Bounds bounds(position);
+			if (button) bounds = Bounds::encapsulate(drag_origin, position);
+			draw_removal(bounds, button);
 			break;
 		}
 		case ToolType::Clipboard:
 		{
 			if (selected_clip == ClipType::Paste)
 			{
-				if (selected_buffer == nullptr) return;
+				if (selected_buffer == nullptr) break;
 
-				Int2 min = selected_buffer->get_position(mouse_point);
-				draw_bounds = { min, min + selected_buffer->size() };
-				selected_buffer->draw(min, *draw_context, *layer_view);
+				static constexpr uint32_t ColorBackground = make_color(0, 0, 0);
+				position = selected_buffer->get_position(mouse_point);
+
+				if (not button)
+				{
+					Bounds bounds(position, position + selected_buffer->size());
+					draw_selection(bounds, button, ColorBackground);
+					selected_buffer->draw(position, *draw_context, *layer_view);
+
+					break;
+				}
+
+				Int2 size = selected_buffer->size();
+
+				if (drag_type == DragType::Origin)
+				{
+					drag_origin = position;
+					drag_position = position;
+				}
+				else
+				{
+					Int2 offset = position - drag_origin;
+					offset = offset / size * size;
+					position = offset + drag_origin;
+
+					if (offset == Int2())
+					{
+						drag_type = DragType::Origin;
+						drag_position = position;
+					}
+					else if (offset.x > offset.y)
+					{
+						drag_type = DragType::Horizontal;
+						drag_position = Int2(position.x, drag_origin.y);
+					}
+					else
+					{
+						drag_type = DragType::Vertical;
+						drag_position = Int2(drag_origin.x, position.y);
+					}
+				}
+
+				position = drag_position;
+
+				Bounds bounds = Bounds::encapsulate(drag_origin, position);
+				bounds = Bounds(bounds.get_min(), bounds.get_max() + size);
+				draw_selection(bounds, button, make_color(0, 0, 0));
+
+				//				Int2 min = draw_position;
+				//				Bounds bounds(min, min + selected_buffer->size());
+				//
+				//				selected_buffer->draw(min, *draw_context, *layer_view);
 			}
-			else if (button)
+			else
 			{
-				assert(drag_type != DragType::None);
-
-				draw_bounds = Bounds::encapsulate(drag_origin, position);
-				fill_color = selected_clip == ClipType::Cut ? RemovalColor : PastingColor;
+				Bounds bounds(position);
+				if (button) bounds = Bounds::encapsulate(drag_origin, position);
+				if (selected_clip == ClipType::Cut) draw_removal(bounds, button);
+				else draw_selection(bounds, button, make_color(210, 205, 220, 35));
 			}
 
 			break;
 		}
 		default: break;
 	}
+}
 
-	draw_rectangle(draw_bounds.center(), Float2(draw_bounds.size()), fill_color, 0.03f, OutlineColor);
+void Cursor::draw_rectangle(Float2 center, Float2 extend, uint32_t color)
+{
+	rectangle->setPosition(center.x - extend.x, center.y - extend.y);
+	rectangle->setSize(sf::Vector2f(extend.x, extend.y) * 2.0f);
+	rectangle->setFillColor(sf::Color(color));
+	window.draw(*rectangle, layer_view->get_render_states());
+}
+
+static std::array<sf::Vertex, 5> get_vertices_border(Bounds bounds, bool highlight)
+{
+	sf::Color color(make_color(230, 225, 240, highlight ? 255 : 160));
+	Float2 min(bounds.get_min());
+	Float2 max(bounds.get_max());
+
+	return { sf::Vertex(sf::Vector2f(min.x, min.y), color), sf::Vertex(sf::Vector2f(max.x, min.y), color),
+	         sf::Vertex(sf::Vector2f(max.x, max.y), color), sf::Vertex(sf::Vector2f(min.x, max.y), color),
+	         sf::Vertex(sf::Vector2f(min.x, min.y), color) };
+}
+
+void Cursor::draw_selection(Bounds bounds, bool highlight, uint32_t color)
+{
+	auto vertices = get_vertices_border(bounds, highlight);
+	draw_rectangle(bounds.center(), bounds.extend(), color);
+	window.draw(vertices.data(), 5, sf::PrimitiveType::LineStrip, layer_view->get_render_states());
+}
+
+void Cursor::draw_removal(Bounds bounds, bool highlight)
+{
+	auto vertices = get_vertices_border(bounds, highlight);
+	std::swap(vertices[1], vertices[2]);
+
+	draw_selection(bounds, highlight, make_color(220, 10, 30, 35));
+	window.draw(vertices.data(), 4, sf::PrimitiveType::Lines, layer_view->get_render_states());
 }
 
 void Cursor::execute_key_event(const sf::Event& event)
@@ -564,7 +666,12 @@ void Cursor::execute_key_event(const sf::Event& event)
 		}
 		case sf::Keyboard::R:
 		{
-			if (selected_tool == ToolType::PortPlacement && selected_port != PortType::Bridge) selected_rotation = selected_rotation.get_next();
+			if (drag_type != DragType::None) break;
+
+			if (selected_tool == ToolType::PortPlacement && selected_port != PortType::Bridge)
+			{
+				selected_rotation = selected_rotation.get_next();
+			}
 
 			if (selected_tool == ToolType::Clipboard && selected_clip == ClipType::Paste && selected_buffer != nullptr)
 			{
@@ -612,11 +719,21 @@ void Cursor::execute_mouse_event(const sf::Event& event)
 			if (mouse.button == sf::Mouse::Right) selected_tool = ToolType::Mouse;
 			if (mouse.button != sf::Mouse::Left || layer == nullptr) break;
 
-			if (selected_tool == ToolType::Clipboard && selected_clip == ClipType::Paste && selected_buffer != nullptr)
+			switch (selected_tool)
 			{
-				Int2 position = selected_buffer->get_position(mouse_point);
-				layer->erase({ position, position + selected_buffer->size() });
-				selected_buffer->paste(position, *layer);
+				case ToolType::WirePlacement: break;
+				case ToolType::PortPlacement: break;
+				case ToolType::TileRemoval: break;
+				case ToolType::Clipboard:
+				{
+					if (selected_clip != ClipType::Paste || selected_buffer == nullptr) break;
+					Int2 position = selected_buffer->get_position(mouse_point);
+					layer->erase({ position, position + selected_buffer->size() });
+					selected_buffer->paste(position, *layer);
+
+					break;
+				}
+				default: break;
 			}
 
 			break;
@@ -624,47 +741,71 @@ void Cursor::execute_mouse_event(const sf::Event& event)
 		case sf::Event::MouseButtonReleased:
 		{
 			if (mouse.button != sf::Mouse::Left || drag_type == DragType::None) break;
-			drag_type = DragType::None;
 
 			Int2 position;
-			if (layer == nullptr || not try_get_mouse_position(position)) break;
-
-			Bounds bounds = Bounds::encapsulate(position, drag_origin);
-
-			if (selected_tool == ToolType::TileRemoval) layer->erase(bounds);
-			else if (selected_tool == ToolType::Clipboard && selected_clip != ClipType::Paste)
+			if (layer == nullptr || not try_get_mouse_position(position))
 			{
-				selected_buffer = std::make_unique<ClipBuffer>(*layer, bounds);
-				if (selected_clip == ClipType::Cut) layer->erase(bounds);
+				drag_type = DragType::None;
+				break;
 			}
 
+			switch (selected_tool)
+			{
+				case ToolType::WirePlacement:
+				{
+					place_wire(position);
+					break;
+				}
+				case ToolType::PortPlacement:
+				{
+					place_port(position);
+					break;
+				}
+				case ToolType::TileRemoval:
+				{
+					layer->erase(Bounds::encapsulate(position, drag_origin));
+					break;
+				}
+				case ToolType::Clipboard:
+				{
+					if (selected_clip == ClipType::Paste)
+					{
+						if (selected_buffer == nullptr) break;
+
+						position = selected_buffer->get_position(mouse_point);
+						layer->erase({ position, position + selected_buffer->size() });
+						selected_buffer->paste(position, *layer);
+					}
+					else
+					{
+						Bounds bounds = Bounds::encapsulate(position, drag_origin);
+						selected_buffer = std::make_unique<ClipBuffer>(*layer, bounds);
+						if (selected_clip == ClipType::Cut) layer->erase(bounds);
+					}
+
+					break;
+				}
+				default: break;
+			}
+
+			drag_type = DragType::None;
 			break;
 		}
 		default: break;
 	}
 }
 
-Int2 Cursor::place_wire(Int2 position)
+void Cursor::place_wire(Int2 position)
 {
-	assert(drag_type != DragType::None);
 	Layer& layer = *controller->get_layer();
 
-	if (drag_type == DragType::Origin)
-	{
-		if (layer.has(drag_origin, TileType::None)) Wire::insert(layer, drag_origin);
-		return drag_origin;
-	}
-
+	assert(drag_type != DragType::None);
 	bool horizontal = drag_type == DragType::Horizontal;
-	assert(horizontal || drag_type == DragType::Vertical);
-
-	Int2 other_axis = horizontal ? Int2(0, 1) : Int2(1, 0);
-	Int2 old_position = Float2::floor(last_mouse_point);
-	auto drag = horizontal ?
-	            std::make_pair(old_position.x, position.x) :
-	            std::make_pair(old_position.y, position.y);
+	auto drag = horizontal ? std::make_pair(drag_origin.x, position.x)
+	                       : std::make_pair(drag_origin.y, position.y);
 
 	if (drag.first > drag.second) std::swap(drag.first, drag.second);
+	Int2 other_axis = horizontal ? Int2(0, 1) : Int2(1, 0);
 
 	for (int32_t i = drag.first; i <= drag.second; ++i)
 	{
@@ -679,7 +820,13 @@ Int2 Cursor::place_wire(Int2 position)
 
 			if (bridge)
 			{
-				if (type == TileType::Wire) Wire::erase(layer, current);
+				if (type == TileType::Wire)
+				{
+					Wire::erase(layer, current);
+					type = TileType::None;
+				}
+
+				assert(type == TileType::None);
 				Bridge::insert(layer, current);
 				continue;
 			}
@@ -687,16 +834,11 @@ Int2 Cursor::place_wire(Int2 position)
 
 		if (type == TileType::None) Wire::insert(layer, current);
 	}
-
-	return horizontal ? Int2(position.x, drag_origin.y) : Int2(drag_origin.x, position.y);
 }
 
-Int2 Cursor::place_port(Int2 position)
+void Cursor::place_port(Int2 position)
 {
-	assert(drag_type != DragType::None);
-	if (position != drag_origin) return drag_origin;
 	Layer& layer = *controller->get_layer();
-
 	TileTag tile = layer.get(position);
 
 	if (tile.type == TileType::Wire)
@@ -707,7 +849,7 @@ Int2 Cursor::place_port(Int2 position)
 
 	if (selected_port == PortType::Bridge)
 	{
-		if (tile.type != TileType::None) return position;
+		if (tile.type != TileType::None) return;
 		Bridge::insert(layer, position);
 	}
 	else
@@ -717,26 +859,14 @@ Int2 Cursor::place_port(Int2 position)
 		if (tile.type == TileType::Gate)
 		{
 			const Gate& gate = layer.get_list<Gate>()[tile.index];
-			if (gate.get_type() == type && gate.get_rotation() == selected_rotation) return position;
+			if (gate.get_type() == type && gate.get_rotation() == selected_rotation) return;
 			Gate::erase(layer, position);
 			tile = TileTag();
 		}
 
-		if (tile.type != TileType::None) return position;
+		if (tile.type != TileType::None) return;
 		Gate::insert(layer, position, type, selected_rotation);
 	}
-
-	return position;
-}
-
-void Cursor::draw_rectangle(Float2 center, Float2 size, uint32_t fill_color, float outline, uint32_t outline_color)
-{
-	rectangle->setPosition(center.x - size.x / 2.0f, center.y - size.y / 2.0f);
-	rectangle->setSize(sf::Vector2f(size.x, size.y));
-	rectangle->setFillColor(sf::Color(fill_color));
-	rectangle->setOutlineThickness(outline);
-	rectangle->setOutlineColor(sf::Color(outline_color));
-	window.draw(*rectangle, layer_view->get_render_states());
 }
 
 Cursor::ClipBuffer::ClipBuffer(const Layer& source, Bounds bounds) :
@@ -749,13 +879,13 @@ void Cursor::ClipBuffer::paste(Int2 position, Layer& layer) const
 	Int2 one_less = size() - Int2(1);
 	Int2 multiplier = Int2(1);
 
-	if (rotation == TileRotation::Angle180 || rotation == TileRotation::Angle270)
+	if (rotation == TileRotation::Angle180 || rotation == TileRotation::Angle90)
 	{
 		multiplier.x = -1;
 		position.x += one_less.x;
 	}
 
-	if (rotation == TileRotation::Angle180 || rotation == TileRotation::Angle90)
+	if (rotation == TileRotation::Angle180 || rotation == TileRotation::Angle270)
 	{
 		multiplier.y = -1;
 		position.y += one_less.y;

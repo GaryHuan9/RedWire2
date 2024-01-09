@@ -208,13 +208,16 @@ private:
 
 	void execute_key();
 	void execute_mouse(Int2 position);
+
+	void draw_rectangle(Float2 center, Float2 extend, uint32_t color);
+	void draw_selection(Bounds bounds, bool highlight, uint32_t color);
+	void draw_removal(Bounds bounds, bool highlight);
+
 	void execute_key_event(const sf::Event& event);
 	void execute_mouse_event(const sf::Event& event);
 
-	Int2 place_wire(Int2 position);
-	Int2 place_port(Int2 position);
-
-	void draw_rectangle(Float2 center, Float2 size, uint32_t fill_color = ~uint32_t(), float outline = 0.0f, uint32_t outline_color = ~uint32_t());
+	void place_wire(Int2 position);
+	void place_port(Int2 position);
 
 	Controller* controller{};
 	LayerView* layer_view{};
@@ -234,9 +237,37 @@ private:
 
 	DragType drag_type = DragType::None;
 	Int2 drag_origin;
+	Int2 drag_position;
 
 	std::unique_ptr<sf::RectangleShape> rectangle;
 	std::unique_ptr<DrawContext> draw_context;
+};
+
+class Cursor::Tool
+{
+public:
+	[[nodiscard]] virtual Int2 get_placement_size() const { return Int2(1); }
+
+	virtual void update_interface() = 0;
+	virtual void execute_mouse(Int2 position) = 0;
+
+protected:
+	enum class DragType : uint8_t
+	{
+		None,
+		Origin,
+		Vertical,
+		Horizontal
+	};
+
+	explicit Tool(const Cursor& cursor) : cursor(cursor) {}
+
+	DragType drag_type = DragType::None;
+	Int2 drag_origin;
+	Int2 drag_position;
+
+private:
+	const Cursor& cursor;
 };
 
 class Cursor::ClipBuffer

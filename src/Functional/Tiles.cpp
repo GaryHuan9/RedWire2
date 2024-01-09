@@ -298,8 +298,8 @@ void Wire::split_positions(Layer& layer, std::vector<Int2>& positions, Index wir
 		return;
 	}
 
-	//The next procedure can create positions.size() - 1 new wires at a maximum
-	//Must reserve to ensure addresses do not move when we emplace new wires
+	//At a maximum, the upcoming procedure can create positions.size() - 1 new wires
+	//So we must reserve to ensure addresses do not move when we emplace new wires
 	auto& wires = layer.get_list<Wire>();
 	wires.reserve(wires.size() + positions.size() - 1);
 	Wire& wire = wires[wire_index]; //Do NOT move this above the previous line!
@@ -503,7 +503,7 @@ void Bridge::draw(DrawContext& context, Int2 position, Index index, const Layer&
 
 	auto corner0 = Float2(position);
 	Float2 corner1 = corner0 + Float2(1.0f);
-	context.emplace_quad(corner0, corner1, make_color(182, 52, 62));
+	context.emplace_quad(corner0, corner1, Color);
 }
 
 Gate::Gate(Gate::Type type, TileRotation rotation) : type(type), rotation(rotation)
@@ -539,10 +539,6 @@ void Gate::erase(Layer& layer, Int2 position)
 
 void Gate::draw(DrawContext& context, Int2 position, Index index, const Layer& layer)
 {
-	static constexpr uint32_t ColorTransistor = make_color(62, 173, 95);
-	static constexpr uint32_t ColorInverter = make_color(59, 73, 255);
-	static constexpr uint32_t ColorDisabled = make_color(18, 17, 24);
-
 	//Draw a little square to indicate rotation
 	constexpr float Extend = 0.15f;
 	constexpr float Offset = 0.5f - Extend;

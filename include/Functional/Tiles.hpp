@@ -2,6 +2,7 @@
 
 #include "main.hpp"
 #include "Utility/SimpleTypes.hpp"
+#include "Utility/Functions.hpp"
 
 #include <unordered_set>
 #include <span>
@@ -207,6 +208,10 @@ public:
 	const uint32_t color;
 #endif
 
+	static constexpr uint32_t ColorUnpowered = make_color(71, 0, 22);
+	static constexpr uint32_t ColorPowered = make_color(254, 22, 59);
+	static constexpr uint32_t ColorStrong = make_color(247, 137, 27);
+
 private:
 	std::unordered_set<Int2> positions;
 	std::unordered_set<Int2> bridges;
@@ -230,6 +235,8 @@ public:
 	friend BinaryWriter& operator<<(BinaryWriter& writer, const Bridge& bridge) { return writer; }
 
 	friend BinaryReader& operator>>(BinaryReader& reader, Bridge& bridge) { return reader; }
+
+	static constexpr uint32_t Color = make_color(182, 52, 62);
 };
 
 class Gate
@@ -270,6 +277,10 @@ public:
 		for (Index& index : gate.wire_indices) reader >> index;
 		return reader;
 	}
+
+	static constexpr uint32_t ColorTransistor = make_color(62, 173, 95);
+	static constexpr uint32_t ColorInverter = make_color(59, 73, 255);
+	static constexpr uint32_t ColorDisabled = make_color(18, 17, 24);
 
 private:
 	[[nodiscard]] Index output_index() const { return wire_indices.front(); }
