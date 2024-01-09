@@ -20,6 +20,8 @@ protected:
 
 	void assert_contents() const
 	{
+		assert_contents(reference, list);
+
 		auto stream = std::make_shared<std::stringstream>();
 		decltype(list) copy;
 
@@ -29,7 +31,6 @@ protected:
 		writer << list;
 		reader >> copy;
 
-		assert_contents(reference, list);
 		assert_contents(reference, copy);
 	}
 
@@ -55,6 +56,12 @@ protected:
 		reference[index] = "";
 		list.erase(index);
 
+		assert_contents();
+	}
+
+	void reserve(uint32_t threshold)
+	{
+		list.reserve(threshold);
 		assert_contents();
 	}
 
@@ -133,4 +140,23 @@ TEST_F(RecyclingListTests, Random)
 		Index index(distribution(random));
 		if (list.contains(index)) erase(index);
 	}
+}
+
+TEST_F(RecyclingListTests, Reserve)
+{
+	reserve(3);
+	for (size_t i = 0; i < 10; ++i) emplace(std::to_string(i));
+
+	erase(Index(3));
+	erase(Index(7));
+
+	reserve(30);
+	for (size_t i = 0; i < 12; ++i) emplace(std::to_string(i));
+
+	erase(Index(16));
+	erase(Index(19));
+	erase(Index(0));
+
+	reserve(55);
+	for (size_t i = 0; i < 100; ++i) emplace(std::to_string(i));
 }

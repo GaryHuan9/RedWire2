@@ -15,7 +15,7 @@ public:
 	RecyclingList() = default;
 	~RecyclingList();
 
-	RecyclingList(const RecyclingList& begin) noexcept;
+	RecyclingList(const RecyclingList& other) noexcept;
 
 	RecyclingList(RecyclingList&& other) noexcept : RecyclingList() { swap(*this, other); }
 
@@ -128,12 +128,13 @@ RecyclingList<T, Allocator>::RecyclingList(const RecyclingList& other) noexcept 
 	count(other.count), capacity(other.capacity), allocator(other.allocator), ranges(other.ranges)
 {
 	items = allocator.allocate(capacity);
-	T* source = other.items;
-	T* destination = items;
 
-	auto copy_range = [source, destination](uint32_t begin, uint32_t end)
+	auto copy_range = [&other, this](uint32_t begin, uint32_t end)
 	{
-		std::uninitialized_copy_n(source + begin, end - begin, destination + begin);
+		size_t length = end - begin;
+		T* source = other.items + begin;
+		T* destination = items + begin;
+		std::uninitialized_copy_n(source, length, destination);
 	};
 
 	other.for_each_range(copy_range);
@@ -146,7 +147,14 @@ RecyclingList<T, Allocator>::~RecyclingList()
 
 	if constexpr (not std::is_trivially_destructible_v<T>)
 	{
-		for_each([](T& item) { std::destroy_at(&item); });
+		auto destroy_range = [this](uint32_t begin, uint32_t end)
+		{
+			uint32_t size = end - begin;
+			T* source = items + begin;
+			std::destroy_n(source, size);
+		};
+
+		for_each_range(destroy_range);
 	}
 
 	allocator.deallocate(items, capacity);
@@ -251,14 +259,15 @@ void RecyclingList<T, Allocator>::reserve(size_t threshold)
 	//Move all valid items
 	if (capacity > 0)
 	{
-		auto move_items = [new_items, this](uint32_t begin, uint32_t end)
+		auto move_range = [new_items, this](uint32_t begin, uint32_t end)
 		{
-			T* pointer = items + begin;
 			size_t length = end - begin;
-			std::uninitialized_move_n(pointer, length, new_items);
+			T* source = items + begin;
+			T* destination = new_items + begin;
+			std::uninitialized_move_n(source, length, destination);
 		};
 
-		for_each_range(move_items);
+		for_each_range(move_range);
 		allocator.deallocate(items, capacity);
 	}
 
