@@ -12,7 +12,7 @@ template<class T>
 concept Insertable = requires(std::ostream stream, T value) { stream << value; };
 
 template<class T>
-concept HasToString = requires(T value) {{ value.to_string() } -> std::convertible_to<std::string>; };
+concept HasToString = requires(T value) {{ value.to_string() } -> std::same_as<std::string>; };
 
 template<Insertable T>
 std::string to_string(const T& value)

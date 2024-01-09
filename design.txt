@@ -12,13 +12,17 @@ or we can simply draw a box around the module and say gates do not work across b
 TODO:
 V add inverter and transistor
 V support connecting to gates around wires
-- begin work on wire update engine
-- support copy and pasting
-- support saving and loading files
-- create and use PositionMap and PositionSet to accelerate searching
-- add greedy meshing (single axis)
+V begin work on wire update engine (basic)
+V support copy and pasting (basic)
+V support saving and loading files (basic)
+- add a layer of indirection between wire index and wire state
+- add greedy meshing (single axis or both axis?)
 - add vertex buffer batching between chunks
 - add modules system
+
+IMPROVEMENTS:
+- switch wire placement to only commit on release (reduce snapping to wrong axis)
+- create and use PositionMap and PositionSet to accelerate searching
 
 module ModuleName
 (

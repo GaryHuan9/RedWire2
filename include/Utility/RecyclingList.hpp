@@ -15,7 +15,7 @@ public:
 	RecyclingList() = default;
 	~RecyclingList();
 
-	RecyclingList(const RecyclingList& other) noexcept;
+	RecyclingList(const RecyclingList& begin) noexcept;
 
 	RecyclingList(RecyclingList&& other) noexcept : RecyclingList() { swap(*this, other); }
 
@@ -62,7 +62,7 @@ public:
 	template<class Action>
 	void for_each_index(Action action) const
 	{
-		for_each_range([action](uint32_t start, uint32_t end) { for (; start < end; ++start) action(Index(start)); });
+		for_each_range([action](uint32_t begin, uint32_t end) { for (; begin < end; ++begin) action(Index(begin)); });
 	}
 
 	Index push(const T& value)
@@ -102,7 +102,7 @@ public:
 
 private:
 	/**
-	 * Performs an action on each valid range of indices, passed in as start and end parameters.
+	 * Performs an action on each valid range of indices, passed in as begin and end parameters.
 	 */
 	template<class Action>
 	void for_each_range(Action action) const;
@@ -114,7 +114,13 @@ private:
 	size_t count = 0;
 	size_t capacity = 0;
 	Allocator allocator;
-	std::map<uint32_t, uint32_t> ranges; //Maps from the end of a range (exclusive) to the start of a range (inclusive)
+
+	/**
+	 * Contains all ranges from which the items are empty as pairs of uint32_t.
+	 * The first uint32_t indicates the end of the range (exclusive).
+	 * The second uint32_t indicates the beginning of the range (inclusive).
+	 */
+	std::map<uint32_t, uint32_t> ranges;
 };
 
 template<class T, class Allocator>
@@ -125,9 +131,9 @@ RecyclingList<T, Allocator>::RecyclingList(const RecyclingList& other) noexcept 
 	T* source = other.items;
 	T* destination = items;
 
-	auto copy_range = [source, destination](uint32_t start, uint32_t end)
+	auto copy_range = [source, destination](uint32_t begin, uint32_t end)
 	{
-		std::uninitialized_copy_n(source + start, end - start, destination + start);
+		std::uninitialized_copy_n(source + begin, end - begin, destination + begin);
 	};
 
 	other.for_each_range(copy_range);
@@ -154,9 +160,9 @@ bool RecyclingList<T, Allocator>::contains(Index index) const
 	auto iterator = ranges.upper_bound(index);
 	if (iterator == ranges.end()) return true;
 
-	uint32_t start = iterator->second;
+	uint32_t begin = iterator->second;
 	uint32_t end = iterator->first;
-	return !(start <= index && index < end);
+	return !(begin <= index && index < end);
 }
 
 template<class T, class Allocator>
@@ -245,10 +251,10 @@ void RecyclingList<T, Allocator>::reserve(size_t threshold)
 	//Move all valid items
 	if (capacity > 0)
 	{
-		auto move_items = [new_items, this](uint32_t start, uint32_t end)
+		auto move_items = [new_items, this](uint32_t begin, uint32_t end)
 		{
-			T* pointer = items + start;
-			size_t length = end - start;
+			T* pointer = items + begin;
+			size_t length = end - begin;
 			std::uninitialized_move_n(pointer, length, new_items);
 		};
 
@@ -313,14 +319,14 @@ void RecyclingList<T, Allocator>::write(BinaryWriter& writer) const
 	size_t current = 0;
 	writer << capacity;
 
-	auto write_range = [&](size_t start, size_t end)
+	auto write_range = [&writer, &current, this](size_t begin, size_t end)
 	{
-		assert(start >= current);
-		writer << static_cast<uint32_t>(start - current);
-		writer << static_cast<uint32_t>(end - start);
+		assert(begin >= current);
+		writer << static_cast<uint32_t>(begin - current);
+		writer << static_cast<uint32_t>(end - begin);
 		current = end;
 
-		for (; start < end; ++start) writer << items[start];
+		for (; begin < end; ++begin) writer << items[begin];
 	};
 
 	for_each_range(write_range);

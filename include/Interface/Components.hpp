@@ -51,6 +51,10 @@ public:
 
 	[[nodiscard]] Float2 get_max() const { return center + extend; }
 
+	[[nodiscard]] Float2 get_center() const { return center; }
+
+	[[nodiscard]] Float2 get_extend() const { return extend; }
+
 	[[nodiscard]] float get_aspect_ratio() const { return aspect_ratio; }
 
 	[[nodiscard]]
@@ -232,6 +236,7 @@ private:
 	Int2 drag_origin;
 
 	std::unique_ptr<sf::RectangleShape> rectangle;
+	std::unique_ptr<DrawContext> draw_context;
 };
 
 class Cursor::ClipBuffer
@@ -256,11 +261,11 @@ public:
 
 	void set_rotation(TileRotation new_rotation) { rotation = new_rotation; }
 
-	void paste(Layer& layer, Int2 position) const;
-	void draw(DrawContext& context, Int2 position) const;
+	void paste(Int2 position, Layer& layer) const;
+	void draw(Int2 position, DrawContext& context, const LayerView& layer_view) const;
 
 private:
-	std::unique_ptr<Layer> source;
+	std::unique_ptr<Layer> buffer;
 	const Bounds bounds;
 	TileRotation rotation;
 };

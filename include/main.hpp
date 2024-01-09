@@ -27,9 +27,10 @@ namespace rw
 class Board;
 class Layer;
 class Engine;
-class DrawContext;
 class DataBuffer;
 class VertexBuffer;
+class ShaderResources;
+class DrawContext;
 
 class TileType;
 class TileTag;

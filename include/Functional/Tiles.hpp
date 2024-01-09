@@ -1,7 +1,6 @@
 #pragma once
 
 #include "main.hpp"
-#include "Drawing.hpp"
 #include "Utility/SimpleTypes.hpp"
 
 #include <unordered_set>
@@ -59,29 +58,18 @@ class TileRotation
 public:
 	enum Value : uint8_t
 	{
-		East,
-		South,
-		West,
-		North
+		Angle0,
+		Angle90,
+		Angle180,
+		Angle270
 	};
 
-	constexpr TileRotation(Value value = Value::East) : data(value) // NOLINT(*-explicit-constructor)
+	constexpr TileRotation(Value value = Value::Angle0) : data(value) // NOLINT(*-explicit-constructor)
 	{
 		assert(static_cast<unsigned int>(value) < Count);
 	}
 
-	[[nodiscard]] bool vertical() const { return data == South || data == North; }
-
-	/**
-	 * Rotates this TileRotation based on a delta defined by two other rotations, going from one to the other.
-	 */
-	[[nodiscard]]
-	TileRotation rotate(TileRotation begin, TileRotation end) const
-	{
-		uint32_t delta = end.get_value() - begin.get_value();
-		uint32_t rotated = (get_value() + delta) % Count;
-		return { static_cast<Value>(rotated) };
-	}
+	[[nodiscard]] bool vertical() const { return data == Value::Angle90 || data == Value::Angle270; }
 
 	/**
 	 * Gets the next rotation in clockwise order.
@@ -89,8 +77,33 @@ public:
 	[[nodiscard]]
 	TileRotation get_next() const
 	{
-		uint32_t next = (get_value() + 1) % Count;
-		return { static_cast<Value>(next) };
+		uint32_t next = get_value() - 1;
+		return { static_cast<Value>(next % Count) };
+	}
+
+	/**
+	 * Rotates another TileRotation.
+	 */
+	[[nodiscard]] TileRotation rotate(TileRotation value) const
+	{
+		uint32_t rotated = get_value() + value.get_value();
+		return { static_cast<Value>(rotated % Count) };
+	}
+
+	/**
+	 * Rotates a Vector2<T>.
+	 */
+	template<class T>
+	Vector2<T> rotate(Vector2<T> value) const
+	{
+		switch (data)
+		{
+			case 0: return value;
+			case 1: return Vector2<T>(-value.y, value.x);
+			case 2: return Vector2<T>(-value.x, -value.y);
+			case 3: return Vector2<T>(value.y, -value.x);
+			default: throw std::domain_error("Bad rotation.");
+		}
 	}
 
 	[[nodiscard]] Int2 get_direction() const;

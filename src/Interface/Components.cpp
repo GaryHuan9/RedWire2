@@ -121,17 +121,12 @@ void Controller::update_interface()
 	}
 }
 
-LayerView::LayerView(Application& application) : Component(application), render_states(std::make_unique<sf::RenderStates>())
+LayerView::LayerView(Application& application) :
+	Component(application), render_states(std::make_unique<sf::RenderStates>()),
+	draw_context(std::make_unique<DrawContext>(application.get_shaders()))
 {
 	Float2 window_size(window.getSize());
 	set_aspect_ratio(window_size.x / window_size.y);
-
-	auto shader_quad = std::make_unique<sf::Shader>();
-	auto shader_wire = std::make_unique<sf::Shader>();
-
-	shader_quad->loadFromFile("rsc/Tiles/Quad.vert", "rsc/Tiles/Tile.frag");
-	shader_wire->loadFromFile("rsc/Tiles/Wire.vert", "rsc/Tiles/Tile.frag");
-	draw_context = std::make_unique<DrawContext>(std::move(shader_quad), std::move(shader_wire));
 }
 
 LayerView::~LayerView() = default;
@@ -255,9 +250,7 @@ void LayerView::draw_grid() const
 
 void LayerView::draw_layer(const Layer& layer) const
 {
-	Float2 scale = Float2(1.0f) / extend;
-	Float2 origin = -center * scale;
-	draw_context->set_view(scale, origin);
+	draw_context->set_view(center, extend);
 
 	const void* states_data;
 	size_t states_size;
@@ -268,7 +261,10 @@ void LayerView::draw_layer(const Layer& layer) const
 	draw_context->clear();
 }
 
-Cursor::Cursor(Application& application) : Component(application), rectangle(std::make_unique<sf::RectangleShape>()) {}
+Cursor::Cursor(Application& application) :
+	Component(application),
+	rectangle(std::make_unique<sf::RectangleShape>()),
+	draw_context(std::make_unique<DrawContext>(application.get_shaders())) {}
 
 void Cursor::initialize()
 {
@@ -384,7 +380,7 @@ void Cursor::update_interface()
 			if (selected_port == PortType::Bridge) break;
 
 			int rotation = selected_rotation.get_value();
-			ImGui::SliderInt("Rotation", &rotation, 0, 3, selected_rotation.to_string());
+			ImGui::SliderInt("Rotation", &rotation, 0, TileRotation::Count - 1, selected_rotation.to_string());
 			selected_rotation = TileRotation(static_cast<TileRotation::Value>(rotation));
 			imgui_tooltip("Rotation of the new port placed. Use [R] to quickly switch to the next rotation.");
 
@@ -407,8 +403,9 @@ void Cursor::update_interface()
 				if (selected_clip == ClipType::Paste)
 				{
 					TileRotation rotation = selected_buffer->get_rotation();
+
 					int value = rotation.get_value();
-					ImGui::SliderInt("Rotation", &value, 0, 3, rotation.to_string());
+					ImGui::SliderInt("Rotation", &value, 0, TileRotation::Count - 1, rotation.to_string());
 					selected_buffer->set_rotation(static_cast<TileRotation::Value>(value));
 					imgui_tooltip("Rotation of the pasting orientation. Use [R] to quickly switch to the next rotation.");
 				}
@@ -530,8 +527,7 @@ void Cursor::execute_mouse(Int2 position)
 
 				Int2 min = selected_buffer->get_position(mouse_point);
 				draw_bounds = { min, min + selected_buffer->size() };
-
-				//TODO: draw clipboard content
+				selected_buffer->draw(min, *draw_context, *layer_view);
 			}
 			else if (button)
 			{
@@ -620,7 +616,7 @@ void Cursor::execute_mouse_event(const sf::Event& event)
 			{
 				Int2 position = selected_buffer->get_position(mouse_point);
 				layer->erase({ position, position + selected_buffer->size() });
-				selected_buffer->paste(*layer, position);
+				selected_buffer->paste(position, *layer);
 			}
 
 			break;
@@ -701,20 +697,32 @@ Int2 Cursor::place_port(Int2 position)
 	if (position != drag_origin) return drag_origin;
 	Layer& layer = *controller->get_layer();
 
+	TileTag tile = layer.get(position);
+
+	if (tile.type == TileType::Wire)
 	{
-		TileType type = layer.get(position).type;
-		if (type == TileType::Wire) Wire::erase(layer, position);
-		else if (type != TileType::None) return position;
+		Wire::erase(layer, position);
+		tile = TileTag();
 	}
 
 	if (selected_port == PortType::Bridge)
 	{
+		if (tile.type != TileType::None) return position;
 		Bridge::insert(layer, position);
 	}
 	else
 	{
-		auto type = Gate::Type::Transistor;
-		if (selected_port == PortType::Inverter) type = Gate::Type::Inverter;
+		auto type = selected_port == PortType::Transistor ? Gate::Type::Transistor : Gate::Type::Inverter;
+
+		if (tile.type == TileType::Gate)
+		{
+			const Gate& gate = layer.get_list<Gate>()[tile.index];
+			if (gate.get_type() == type && gate.get_rotation() == selected_rotation) return position;
+			Gate::erase(layer, position);
+			tile = TileTag();
+		}
+
+		if (tile.type != TileType::None) return position;
 		Gate::insert(layer, position, type, selected_rotation);
 	}
 
@@ -732,22 +740,22 @@ void Cursor::draw_rectangle(Float2 center, Float2 size, uint32_t fill_color, flo
 }
 
 Cursor::ClipBuffer::ClipBuffer(const Layer& source, Bounds bounds) :
-	source(std::make_unique<Layer>(source.copy(bounds))),
-	bounds(bounds), rotation(TileRotation::East) {}
+	buffer(std::make_unique<Layer>(source.copy(bounds))),
+	bounds(bounds), rotation(TileRotation::Angle0) {}
 
-void Cursor::ClipBuffer::paste(Layer& layer, Int2 position) const
+void Cursor::ClipBuffer::paste(Int2 position, Layer& layer) const
 {
 	//Precalculate transformation parameters
 	Int2 one_less = size() - Int2(1);
 	Int2 multiplier = Int2(1);
 
-	if (rotation == TileRotation::West || rotation == TileRotation::North)
+	if (rotation == TileRotation::Angle180 || rotation == TileRotation::Angle270)
 	{
 		multiplier.x = -1;
 		position.x += one_less.x;
 	}
 
-	if (rotation == TileRotation::West || rotation == TileRotation::South)
+	if (rotation == TileRotation::Angle180 || rotation == TileRotation::Angle90)
 	{
 		multiplier.y = -1;
 		position.y += one_less.y;
@@ -757,7 +765,7 @@ void Cursor::ClipBuffer::paste(Layer& layer, Int2 position) const
 	for (Int2 current : bounds)
 	{
 		//Skip empty tiles
-		TileTag tile = source->get(current);
+		TileTag tile = buffer->get(current);
 		if (tile.type == TileType::None) continue;
 
 		//Transform current position based on rotation
@@ -782,11 +790,8 @@ void Cursor::ClipBuffer::paste(Layer& layer, Int2 position) const
 			}
 			case TileType::Gate:
 			{
-				const Gate& gate = source->get_list<Gate>()[tile.index];
-
-				TileRotation gate_rotation = gate.get_rotation();
-				gate_rotation = gate_rotation.rotate(TileRotation::East, rotation);
-				Gate::insert(layer, current, gate.get_type(), gate_rotation);
+				const Gate& gate = buffer->get_list<Gate>()[tile.index];
+				Gate::insert(layer, current, gate.get_type(), rotation.rotate(gate.get_rotation()));
 
 				break;
 			}
@@ -795,9 +800,23 @@ void Cursor::ClipBuffer::paste(Layer& layer, Int2 position) const
 	}
 }
 
-void Cursor::ClipBuffer::draw(DrawContext& context, Int2 position) const
+void Cursor::ClipBuffer::draw(Int2 position, DrawContext& context, const LayerView& layer_view) const
 {
+	Float2 offset = bounds.extend() + Float2(bounds.get_min());
+	offset = rotation.rotate(offset);
 
+	Float2 center = layer_view.get_center();
+	center -= Float2(position) + Float2(size()) / 2.0f - offset;
+
+	context.set_rotation(rotation);
+	context.set_view(center, layer_view.get_extend());
+
+	Float2 min(bounds.get_min());
+	Float2 max(bounds.get_max());
+
+	context.clip(min, max);
+	buffer->draw(context, min, max);
+	context.clear();
 }
 
 Debugger::Debugger(Application& application) : Component(application) {}
@@ -820,7 +839,7 @@ void Debugger::update()
 	if (Int2 position; cursor->try_get_mouse_position(position))
 	{
 		TileTag tile = layer.get(position);
-		ImGui::LabelText("Tile Type", to_string(tile.type).c_str());
+		ImGui::LabelText("Tile Type", tile.type.to_string());
 
 		if (tile.type != TileType::None)
 		{
@@ -984,9 +1003,9 @@ void TickControl::update_interface()
 	}
 
 	{
-		const char* display = display_ticks_per_second.c_str();
+		std::string_view display = display_ticks_per_second;
 		if (display_ticks_per_second.empty()) display = "0";
-		ImGui::LabelText("Achieved TPS", display);
+		ImGui::LabelText("Achieved TPS", display.data());
 		imgui_tooltip("Currently achieved number of ticks per second");
 	}
 

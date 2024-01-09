@@ -17,6 +17,7 @@ static void configure_colors(ImGuiStyle& style);
 
 Application::Application()
 {
+	//Create SFML window context
 	sf::VideoMode video_mode(1920, 1080);
 	sf::ContextSettings settings;
 	settings.antialiasingLevel = 16;
@@ -29,6 +30,7 @@ Application::Application()
 
 	timer = std::make_unique<Timer>();
 
+	//Initialize ImGui
 	auto& io = ImGui::GetIO();
 	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 	io.ConfigWindowsMoveFromTitleBarOnly = true;
@@ -38,10 +40,15 @@ Application::Application()
 	if (not ImGui::SFML::UpdateFontTexture()) throw std::runtime_error("Unable update font texture.");
 	if (glewInit() != GLEW_OK) throw std::runtime_error("Unable initialize GLEW for OpenGL.");
 
+	//Apply ImGui style
 	auto& style = ImGui::GetStyle();
 	configure_spacing(style);
 	configure_colors(style);
 
+	//Compile shader resources
+	shader_resources = std::make_unique<ShaderResources>();
+
+	//Make components
 	make_component<Controller>();
 	make_component<TickControl>();
 	make_component<LayerView>();

@@ -1,9 +1,12 @@
 #include "Functional/Drawing.hpp"
+#include "Functional/Tiles.hpp"
 #include "Utility/Functions.hpp"
 #include "Utility/SimpleTypes.hpp"
 
 #include "SFML/Graphics.hpp"
 #include "GL/glew.h"
+
+#include <fstream>
 
 namespace rw
 {
@@ -202,9 +205,87 @@ void VertexBuffer::update_impl(size_t new_count)
 	bind();
 }
 
-DrawContext::DrawContext(std::unique_ptr<sf::Shader>&& shader_quad, std::unique_ptr<sf::Shader>&& shader_wire) :
-	shader_quad(std::move(shader_quad)), shader_wire(std::move(shader_wire)),
-	wire_states_buffer(GL_SHADER_STORAGE_BUFFER, GL_STREAM_DRAW) {}
+ShaderResources::ShaderResources() :
+	quads(std::make_unique<decltype(quads)::element_type>()),
+	wires(std::make_unique<decltype(wires)::element_type>())
+{
+	auto read_string = [](const std::string& path)
+	{
+		std::ifstream stream(path);
+		std::stringstream buffer;
+
+		if (not stream.good()) throw std::runtime_error("Unable to open stream.");
+		buffer << stream.rdbuf();
+		return buffer.str();
+	};
+
+	auto find_region = [](std::string_view view, std::string_view label) -> std::string_view
+	{
+		auto next_symbol = [](std::string_view& view) -> std::string_view
+		{
+			auto iterator = std::find_if_not(view.begin(), view.end(), std::iswspace);
+			if (iterator == view.end() || iterator == view.begin()) return {};
+			view = view.substr(std::distance(view.begin(), iterator));
+
+			iterator = std::find_if(view.begin(), view.end(), std::iswspace);
+			size_t index = std::distance(view.begin(), iterator);
+
+			auto result = view.substr(0, index);
+			view = view.substr(index);
+			return result;
+		};
+
+		static constexpr std::string_view Keyword = "#define";
+
+		size_t index = view.find(Keyword);
+
+		while (index < view.size())
+		{
+			view = view.substr(index + Keyword.size());
+			bool found = next_symbol(view) == label;
+			index = view.find(Keyword);
+
+			if (found) return view.substr(0, index);
+		}
+
+		return {};
+	};
+
+	auto compile = [](sf::Shader& shader, const std::string& vertex, const std::string& fragment)
+	{
+		if (shader.loadFromMemory(vertex, fragment)) return;
+		throw std::runtime_error("Failed to compile shaders.");
+	};
+
+	std::string vertex_quad = read_string("rsc/Tiles/Quad.vert");
+	std::string vertex_wire = read_string("rsc/Tiles/Wire.vert");
+	std::string fragment = read_string("rsc/Tiles/Tile.frag");
+	std::string position = read_string("rsc/Tiles/Position.glsl");
+
+	TileRotation rotation;
+
+	do
+	{
+		std::string_view view = find_region(position, "R" + std::to_string(rotation.get_value()));
+		if (view.empty()) throw std::runtime_error("Unable to find cross compile region for shader.");
+
+		compile((*quads)[rotation.get_value()], std::string(vertex_quad).append(view), fragment);
+		compile((*wires)[rotation.get_value()], std::string(vertex_wire).append(view), fragment);
+		rotation = rotation.get_next();
+	}
+	while (rotation != TileRotation());
+}
+
+sf::Shader* ShaderResources::get_shader(bool quad, TileRotation rotation) const
+{
+	return &(quad ? quads : wires)->at(rotation.get_value());
+}
+
+DrawContext::DrawContext(const ShaderResources& shaders) :
+	shaders(shaders), wire_states_buffer(GL_SHADER_STORAGE_BUFFER, GL_STREAM_DRAW)
+{
+	set_rotation(TileRotation());
+}
 
 void DrawContext::emplace_quad(Float2 corner0, Float2 corner1, uint32_t color)
 {
@@ -239,16 +320,19 @@ VertexBuffer DrawContext::flush_buffer(bool quad)
 	return quad ? impl(vertices_quad) : impl(vertices_wire);
 }
 
-void DrawContext::set_view(Float2 new_scale, Float2 new_origin)
+void DrawContext::set_rotation(TileRotation new_rotation)
 {
-	scale = new_scale;
-	origin = new_origin;
+	rotation = new_rotation;
+	shader_quad = shaders.get_shader(true, rotation);
+	shader_wire = shaders.get_shader(false, rotation);
+	shader_dirty = true;
+}
 
-	shader_quad->setUniform("scale", sf::Glsl::Vec2(scale.x, scale.y));
-	shader_quad->setUniform("origin", sf::Glsl::Vec2(origin.x, origin.y));
-
-	shader_wire->setUniform("scale", sf::Glsl::Vec2(scale.x, scale.y));
-	shader_wire->setUniform("origin", sf::Glsl::Vec2(origin.x, origin.y));
+void DrawContext::set_view(Float2 center, Float2 extend)
+{
+	scale = Float2(1.0f) / extend;
+	origin = -center * scale;
+	shader_dirty = true;
 }
 
 void DrawContext::set_wire_states(const void* data, size_t size)
@@ -263,15 +347,17 @@ void DrawContext::clip(Float2 min_position, Float2 max_position) const
 	//Transform position from world space to clip space
 	auto transform = [this](Float2 position)
 	{
-		//Note that scale and origin are in clip space
-		position = position * scale + origin;
+		position = rotation.rotate(position);
+		position = position * scale + origin; //Note that scale and origin transforms to clip space
 		position = position * 0.5f + Float2(0.5f);
 		position = position.max(Float2(0.0f)).min(Float2(1.0f));
 		return position;
 	};
 
-	min_position = transform(min_position);
-	max_position = transform(max_position);
+	Float2 corner0 = transform(min_position);
+	Float2 corner1 = transform(max_position);
+	Float2 min = corner0.min(corner1);
+	Float2 max = corner0.max(corner1);
 
 	//Get screen size
 	std::array<GLint, 4> viewport{};
@@ -280,8 +366,8 @@ void DrawContext::clip(Float2 min_position, Float2 max_position) const
 	Float2 screen(viewport[2], viewport[3]);
 
 	//Transform from clip space to screen space
-	Int2 min_pixel = Float2::floor(min_position * screen);
-	Int2 max_pixel = Float2::floor(max_position * screen) + Int2(1);
+	Int2 min_pixel = Float2::floor(min * screen);
+	Int2 max_pixel = Float2::floor(max * screen) + Int2(1);
 	Int2 size = max_pixel - min_pixel;
 
 	//Apply clip
@@ -292,15 +378,17 @@ void DrawContext::clip(Float2 min_position, Float2 max_position) const
 
 void DrawContext::draw(bool quad, const VertexBuffer& buffer) const
 {
+	set_shader_parameters();
+
 	if (quad)
 	{
-		sf::Shader::bind(shader_quad.get());
+		sf::Shader::bind(shader_quad);
 		buffer.draw();
 	}
 	else
 	{
-		sf::Shader::bind(shader_wire.get());
-		wire_states_buffer.bind_base(2);
+		sf::Shader::bind(shader_wire);
+		wire_states_buffer.bind_base(0);
 		buffer.draw();
 		wire_states_buffer.unbind();
 	}
@@ -316,6 +404,18 @@ void DrawContext::clear()
 
 	vertices_quad.clear();
 	vertices_wire.clear();
+}
+
+void DrawContext::set_shader_parameters() const
+{
+	if (not shader_dirty) return;
+	shader_dirty = false;
+
+	shader_quad->setUniform("scale", sf::Glsl::Vec2(scale.x, scale.y));
+	shader_quad->setUniform("origin", sf::Glsl::Vec2(origin.x, origin.y));
+
+	shader_wire->setUniform("scale", sf::Glsl::Vec2(scale.x, scale.y));
+	shader_wire->setUniform("origin", sf::Glsl::Vec2(origin.x, origin.y));
 }
 
 }

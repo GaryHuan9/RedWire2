@@ -27,6 +27,8 @@ public:
 		return iterator == components.end() ? nullptr : static_cast<T*>(iterator->get());
 	}
 
+	[[nodiscard]] const ShaderResources& get_shaders() const { return *shader_resources; }
+
 	[[nodiscard]] const Timer& get_timer() const { return *timer; }
 
 	[[nodiscard]] bool handle_mouse() const;
@@ -50,6 +52,7 @@ private:
 
 	std::unique_ptr<sf::RenderWindow> window;
 	std::vector<std::unique_ptr<Component>> components;
+	std::unique_ptr<ShaderResources> shader_resources;
 	std::unique_ptr<Timer> timer;
 };
 

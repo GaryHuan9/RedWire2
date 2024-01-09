@@ -86,8 +86,6 @@ public:
 
 	bool set(Int2 position, TileTag tile);
 
-	void mark_dirty();
-
 	void update_draw_buffer(DrawContext& context, const Layer& layer);
 
 	void write(BinaryWriter& writer) const;

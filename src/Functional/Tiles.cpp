@@ -10,7 +10,7 @@
 namespace rw
 {
 
-static constexpr std::array<Int2, 4> FourDirections = { Int2(1, 0), Int2(0, -1), Int2(-1, 0), Int2(0, 1) };
+static constexpr std::array<Int2, 4> FourDirections = { Int2(1, 0), Int2(0, 1), Int2(-1, 0), Int2(0, -1) };
 static constexpr std::array<Int2, 2> HorizontalDirections = { Int2(1, 0), Int2(-1, 0) };
 static constexpr std::array<Int2, 2> VerticalDirections = { Int2(0, 1), Int2(0, -1) };
 
@@ -34,7 +34,7 @@ Int2 TileRotation::get_direction() const
 
 const char* TileRotation::to_string() const
 {
-	static constexpr std::array<const char*, 5> Strings = { "East", "South", "West", "North" };
+	static constexpr std::array<const char*, 5> Strings = { "0 Degree", "90 Degrees", "180 Degrees", "270 Degrees" };
 	return Strings[get_value()];
 }
 
@@ -402,12 +402,6 @@ void Wire::split_positions(Layer& layer, std::vector<Int2>& positions, Index wir
 		assert(bridges.empty());
 	}
 	while (not positions.empty());
-}
-
-static void write(BinaryWriter& writer, const std::unordered_set<Int2>& positions)
-{
-	writer << positions.size();
-	for (Int2 position : positions) writer << position;
 }
 
 BinaryWriter& operator<<(BinaryWriter& writer, const Wire& wire)

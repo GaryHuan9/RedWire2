@@ -38,7 +38,6 @@ void Layer::draw(DrawContext& context, Float2 min_position, Float2 max_position)
 		chunk.draw(context);
 	};
 
-	context.clip(min_position, max_position);
 	for_each_chunk(draw, Bounds(min_position, max_position));
 }
 
@@ -218,21 +217,19 @@ bool Layer::Chunk::set(Int2 position, TileTag tile)
 	{
 		assert(occupied_tiles > 0);
 		--occupied_tiles;
-		mark_dirty();
+		vertices_dirty = true;
 	}
 
 	if (tile.type != TileType::None)
 	{
 		++occupied_tiles;
 		index = tile.index;
-		mark_dirty();
+		vertices_dirty = true;
 	}
 
 	type = tile.type;
 	return occupied_tiles > 0;
 }
-
-void Layer::Chunk::mark_dirty() { vertices_dirty = true; }
 
 void Layer::Chunk::update_draw_buffer(DrawContext& context, const Layer& layer)
 {
@@ -339,7 +336,7 @@ void Layer::Chunk::read(BinaryReader& reader)
 		i = end;
 	}
 
-	if (occupied_tiles > 0) mark_dirty();
+	if (occupied_tiles > 0) vertices_dirty = true;
 }
 
 TileTag Layer::Chunk::get(size_t tile_index) const
