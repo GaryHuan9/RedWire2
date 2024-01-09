@@ -90,6 +90,8 @@ public:
 
 	static constexpr Int2 floor(V value) { return Int2(std::floor(value.x), std::floor(value.y)); }
 
+	static constexpr Int2 round(V value) { return Int2(std::lround(value.x), std::lround(value.y)); }
+
 	friend std::ostream& operator<<(std::ostream& stream, V value) { return stream << '(' << value.x << ", " << value.y << ')'; }
 
 	friend BinaryWriter& operator<<(BinaryWriter& writer, V value)
@@ -117,6 +119,9 @@ inline constexpr Int2 Int2::ceil(Int2 value) { return value; }
 
 template<>
 inline constexpr Int2 Int2::floor(Int2 value) { return value; }
+
+template<>
+inline constexpr Int2 Int2::round(Int2 value) { return value; }
 
 class Bounds
 {
@@ -151,6 +156,13 @@ public:
 		Int2 min = point0.min(point1);
 		Int2 max = point0.max(point1);
 		return { min, max + Int2(1) };
+	}
+
+	static Bounds encapsulate(Bounds bounds0, Bounds bounds1)
+	{
+		Int2 min = bounds0.min.min(bounds1.min);
+		Int2 max = bounds0.max.max(bounds1.max);
+		return { min, max };
 	}
 
 	Bounds operator+(Int2 value) const { return { min + value, max + value }; }

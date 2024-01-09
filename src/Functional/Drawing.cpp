@@ -7,6 +7,7 @@
 #include "GL/glew.h"
 
 #include <fstream>
+#include <filesystem>
 
 namespace rw
 {
@@ -205,11 +206,11 @@ void VertexBuffer::update_impl(size_t new_count)
 	bind();
 }
 
-ShaderResources::ShaderResources() :
-	quads(std::make_unique<decltype(quads)::element_type>()),
-	wires(std::make_unique<decltype(wires)::element_type>())
+static std::string load_shader(const std::filesystem::path& path)
 {
-	auto read_string = [](const std::string& path)
+	namespace fs = std::filesystem;
+
+	auto read_string = [](const fs::path& path)
 	{
 		std::ifstream stream(path);
 		std::stringstream buffer;
@@ -219,70 +220,52 @@ ShaderResources::ShaderResources() :
 		return buffer.str();
 	};
 
-	auto find_region = [](std::string_view view, std::string_view label) -> std::string_view
+	std::string shader = read_string(path);
+	uint32_t start = 0;
+
+	while (start = shader.find("#include", start), start < shader.size())
 	{
-		auto next_symbol = [](std::string_view& view) -> std::string_view
-		{
-			auto iterator = std::find_if_not(view.begin(), view.end(), std::iswspace);
-			if (iterator == view.end() || iterator == view.begin()) return {};
-			view = view.substr(std::distance(view.begin(), iterator));
+		uint32_t quote0 = shader.find('"', start) + 1;
+		uint32_t quote1 = shader.find('"', quote0);
+		if (quote1 >= shader.size()) throw std::runtime_error("Cannot parse shader.");
 
-			iterator = std::find_if(view.begin(), view.end(), std::iswspace);
-			size_t index = std::distance(view.begin(), iterator);
+		fs::path directory = path.parent_path();
+		fs::path append = shader.substr(quote0, quote1 - quote0);
+		std::string include = read_string(directory / append);
 
-			auto result = view.substr(0, index);
-			view = view.substr(index);
-			return result;
-		};
+		shader.erase(start, quote1 + 1 - start);
+		shader.insert(start, include);
+		start += include.size();
+	}
 
-		static constexpr std::string_view Keyword = "#define";
+	return shader;
+}
 
-		size_t index = view.find(Keyword);
-
-		while (index < view.size())
-		{
-			view = view.substr(index + Keyword.size());
-			bool found = next_symbol(view) == label;
-			index = view.find(Keyword);
-
-			if (found) return view.substr(0, index);
-		}
-
-		return {};
-	};
-
+ShaderResources::ShaderResources() : data(std::make_unique<decltype(data)::element_type>())
+{
 	auto compile = [](sf::Shader& shader, const std::string& vertex, const std::string& fragment)
 	{
 		if (shader.loadFromMemory(vertex, fragment)) return;
 		throw std::runtime_error("Failed to compile shaders.");
 	};
 
-	std::string vertex_quad = read_string("rsc/Tiles/Quad.vert");
-	std::string vertex_wire = read_string("rsc/Tiles/Wire.vert");
-	std::string fragment = read_string("rsc/Tiles/Tile.frag");
-	std::string position = read_string("rsc/Tiles/Position.glsl");
+	std::string vertex_quad = load_shader("rsc/Tiles/Quad.vert");
+	std::string vertex_wire = load_shader("rsc/Tiles/Wire.vert");
+	std::string fragment = load_shader("rsc/Tiles/Tile.frag");
 
-	TileRotation rotation;
-
-	do
-	{
-		std::string_view view = find_region(position, "R" + std::to_string(rotation.get_value()));
-		if (view.empty()) throw std::runtime_error("Unable to find cross compile region for shader.");
-
-		compile((*quads)[rotation.get_value()], std::string(vertex_quad).append(view), fragment);
-		compile((*wires)[rotation.get_value()], std::string(vertex_wire).append(view), fragment);
-		rotation = rotation.get_next();
-	}
-	while (rotation != TileRotation());
+	compile(data->at(0), vertex_quad, fragment);
+	compile(data->at(1), vertex_wire, fragment);
 }
 
-sf::Shader* ShaderResources::get_shader(bool quad, TileRotation rotation) const
+sf::Shader* ShaderResources::get_shader(bool quad) const
 {
-	return &(quad ? quads : wires)->at(rotation.get_value());
+	return &data->at(quad ? 0 : 1);
 }
 
 DrawContext::DrawContext(const ShaderResources& shaders) :
-	shaders(shaders), wire_states_buffer(GL_SHADER_STORAGE_BUFFER, GL_STREAM_DRAW)
+	shader_quad(shaders.get_shader(true)),
+	shader_wire(shaders.get_shader(false)),
+	wire_states_buffer(GL_SHADER_STORAGE_BUFFER, GL_STREAM_DRAW)
 {
 	set_rotation(TileRotation());
 }
@@ -323,8 +306,6 @@ VertexBuffer DrawContext::flush_buffer(bool quad)
 void DrawContext::set_rotation(TileRotation new_rotation)
 {
 	rotation = new_rotation;
-	shader_quad = shaders.get_shader(true, rotation);
-	shader_wire = shaders.get_shader(false, rotation);
 	shader_dirty = true;
 }
 
@@ -366,8 +347,8 @@ void DrawContext::clip(Float2 min_position, Float2 max_position) const
 	Float2 screen(viewport[2], viewport[3]);
 
 	//Transform from clip space to screen space
-	Int2 min_pixel = Float2::floor(min * screen);
-	Int2 max_pixel = Float2::floor(max * screen) + Int2(1);
+	Int2 min_pixel = Float2::round(min * screen);
+	Int2 max_pixel = Float2::round(max * screen) + Int2(1);
 	Int2 size = max_pixel - min_pixel;
 
 	//Apply clip
@@ -411,11 +392,15 @@ void DrawContext::set_shader_parameters() const
 	if (not shader_dirty) return;
 	shader_dirty = false;
 
-	shader_quad->setUniform("scale", sf::Glsl::Vec2(scale.x, scale.y));
-	shader_quad->setUniform("origin", sf::Glsl::Vec2(origin.x, origin.y));
+	auto set_parameters = [this](sf::Shader& shader)
+	{
+		shader.setUniform("scale", sf::Glsl::Vec2(scale.x, scale.y));
+		shader.setUniform("origin", sf::Glsl::Vec2(origin.x, origin.y));
+		shader.setUniform("rotation", static_cast<int>(rotation.get_value()));
+	};
 
-	shader_wire->setUniform("scale", sf::Glsl::Vec2(scale.x, scale.y));
-	shader_wire->setUniform("origin", sf::Glsl::Vec2(origin.x, origin.y));
+	set_parameters(*shader_quad);
+	set_parameters(*shader_wire);
 }
 
 }

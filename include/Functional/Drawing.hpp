@@ -76,14 +76,14 @@ private:
 	{
 		set_attribute<T>(attribute, stride, offset);
 		if constexpr (sizeof...(Ts) == 0) return;
-		else set_attributes_impl < Ts...>(attribute + 1, stride, offset + sizeof(T));
+		else set_attributes_impl<Ts...>(attribute + 1, stride, offset + sizeof(T));
 	}
 
 	template<class T, class... Ts>
 	static size_t get_total_sizeof()
 	{
 		if constexpr (sizeof...(Ts) == 0) return sizeof(T);
-		else return sizeof(T) + get_total_sizeof < Ts...>();
+		else return sizeof(T) + get_total_sizeof<Ts...>();
 	}
 
 	GLenum type;
@@ -154,11 +154,10 @@ class ShaderResources : NonCopyable
 public:
 	ShaderResources();
 
-	[[nodiscard]] sf::Shader* get_shader(bool quad, TileRotation rotation = TileRotation()) const;
+	[[nodiscard]] sf::Shader* get_shader(bool quad) const;
 
 private:
-	std::unique_ptr<std::array<sf::Shader, 4>> quads;
-	std::unique_ptr<std::array<sf::Shader, 4>> wires;
+	std::unique_ptr<std::array<sf::Shader, 2>> data;
 };
 
 class DrawContext : NonCopyable
@@ -195,18 +194,16 @@ private:
 
 	void set_shader_parameters() const;
 
-	const ShaderResources& shaders;
+	sf::Shader* shader_quad;
+	sf::Shader* shader_wire;
 
 	std::vector<QuadVertex> vertices_quad;
 	std::vector<WireVertex> vertices_wire;
 
 	TileRotation rotation;
-	sf::Shader* shader_quad{};
-	sf::Shader* shader_wire{};
-	mutable bool shader_dirty = false;
-
 	Float2 scale;
 	Float2 origin;
+	mutable bool shader_dirty = false;
 
 	DataBuffer wire_states_buffer;
 };

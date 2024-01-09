@@ -1,45 +1,20 @@
-#define R0
-
 uniform vec2 scale;
 uniform vec2 origin;
+uniform int rotation;
 
-vec4 get_position(vec2 position)
+vec2 rotate(vec2 position)
 {
-    vec2 result = position * scale + origin;
-    return vec4(result, 0.0f, 1.0f);
+    switch (rotation)
+    {
+        case 1: return vec2(-position.y, position.x);
+        case 3: return vec2(position.y, -position.x);
+        case 2: return -position;
+        default : return position;
+    }
 }
 
-#define R1
-
-uniform vec2 scale;
-uniform vec2 origin;
-
 vec4 get_position(vec2 position)
 {
-    position = vec2(-position.y, position.x);
-    vec2 result = position * scale + origin;
-    return vec4(result, 0.0f, 1.0f);;
-}
-
-#define R2
-
-uniform vec2 scale;
-uniform vec2 origin;
-
-vec4 get_position(vec2 position)
-{
-    vec2 result = -position * scale + origin;
-    return vec4(result, 0.0f, 1.0f);
-}
-
-#define R3
-
-uniform vec2 scale;
-uniform vec2 origin;
-
-vec4 get_position(vec2 position)
-{
-    position = vec2(position.y, -position.x);
-    vec2 result = position * scale + origin;
-    return vec4(result, 0.0f, 1.0f);
+    position = rotate(position) * scale + origin;
+    return vec4(position, 0.0f, 1.0f);
 }
