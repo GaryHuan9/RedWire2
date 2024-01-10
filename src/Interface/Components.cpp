@@ -261,75 +261,77 @@ void LayerView::draw_layer(const Layer& layer) const
 	draw_context->clear();
 }
 
-Cursor::Cursor(Application& application) :
-	Component(application),
-	rectangle(std::make_unique<sf::RectangleShape>()),
-	draw_context(std::make_unique<DrawContext>(application.get_shaders())) {}
+Cursor::Cursor(Application& application) : Component(application), tools() {}
 
 void Cursor::initialize()
 {
 	controller = application.find_component<Controller>();
 	layer_view = application.find_component<LayerView>();
+
+	//Create tools at the end of initialization since some of them might look for components
+	tools.emplace_back(std::make_unique<Cursor::MouseTool>(*this));
+	tools.emplace_back(std::make_unique<Cursor::WireTool>(*this));
+	tools.emplace_back(std::make_unique<Cursor::DeviceTool>(*this));
+	tools.emplace_back(std::make_unique<Cursor::RemovalTool>(*this));
+	tools.emplace_back(std::make_unique<Cursor::ClipboardTool>(*this));
 }
 
 void Cursor::update()
 {
-	Layer* layer = controller->get_layer();
 	Float2 mouse(sf::Mouse::getPosition(window));
 	mouse_percent = mouse / Float2(window.getSize());
 	mouse_percent.y = 1.0f - mouse_percent.y;
 
 	last_mouse_point = mouse_point;
-	recalculate_mouse_point();
+	mouse_point = layer_view->get_point(mouse_percent);
 
-	if (layer == nullptr)
+	if (controller->get_layer() == nullptr)
 	{
 		if (imgui_begin("Cursor")) ImGui::End();
 		return;
 	}
 
+	Tool& tool = *tools[selected_tool];
+	uint32_t old_tool = selected_tool;
+
 	if (imgui_begin("Cursor"))
 	{
 		update_interface();
+		tool.update_interface();
 		ImGui::End();
 	}
 
-	if (application.handle_keyboard()) execute_key();
-	if (Int2 position; try_get_mouse_position(position)) execute_mouse(position);
+	if (application.handle_keyboard()) update_panning();
+	if (application.handle_mouse()) tool.update_mouse();
+	if (old_tool != selected_tool) tool.deactivate();
 }
 
 void Cursor::input_event(const sf::Event& event)
 {
 	Component::input_event(event);
+	if (controller->get_layer() == nullptr) return;
 
-	switch (event.type)
+	if (event.type == sf::Event::MouseWheelScrolled)
 	{
-		case sf::Event::MouseWheelScrolled:
-		{
-			float delta = event.mouseWheelScroll.delta / -32.0f;
-			layer_view->change_zoom(delta, mouse_percent);
-			break;
-		}
-		case sf::Event::KeyPressed:
-		{
-			execute_key_event(event);
-			break;
-		}
-		case sf::Event::MouseButtonPressed:
-		case sf::Event::MouseButtonReleased:
-		{
-			execute_mouse_event(event);
-			break;
-		}
-		default :break;
+		float delta = event.mouseWheelScroll.delta / -32.0f;
+		layer_view->change_zoom(delta, mouse_percent);
 	}
-}
 
-bool Cursor::try_get_mouse_position(Int2& position) const
-{
-	if (not application.handle_mouse()) return false;
-	position = Float2::floor(mouse_point);
-	return true;
+	Tool& tool = *tools[selected_tool];
+	tool.input_event(event);
+
+	for (uint32_t i = 0; i < tools.size(); ++i)
+	{
+		if (not tools[i]->request_activation(event)) continue;
+
+		if (i != selected_tool)
+		{
+			tool.deactivate();
+			selected_tool = i;
+		}
+
+		break;
+	}
 }
 
 void Cursor::update_interface()
@@ -349,77 +351,16 @@ void Cursor::update_interface()
 
 		int tool = static_cast<int>(selected_tool);
 		ImGui::Combo("Tool", &tool, ToolNames.data(), ToolNames.size());
-		selected_tool = static_cast<ToolType>(tool);
+		selected_tool = static_cast<uint32_t>(tool);
 
 		imgui_tooltip(
 			"Currently selected cursor tool. Can also be switched with button shortcuts: Mouse = [RMB], Wire = [E], "
 			"Transistor = [Num1], Inverter = [Num2], Bridge = [Num3], Removal = [Q], Cut = [X], Copy = [C], Paste = [V]"
 		);
 	}
-
-	switch (selected_tool)
-	{
-		case ToolType::WirePlacement:
-		{
-			ImGui::Checkbox("Auto Bridge Placement", &selected_auto_bridge);
-			imgui_tooltip("Whether to automatically place bridges at wire junctions (i.e. tiles with more than two wire neighbors)");
-			break;
-		}
-		case ToolType::PortPlacement:
-		{
-			static constexpr std::array PortNames = { "Transistor", "Inverter", "Bridge" };
-			int port = static_cast<int>(selected_port);
-			ImGui::SliderInt("Port", &port, 0, PortNames.size() - 1, PortNames[port]);
-			selected_port = static_cast<PortType>(port);
-
-			imgui_tooltip(
-				"Currently selected port to place. Can also be switched with button shortcuts: "
-				"Transistor = [Num1], Inverter = [Num2], Bridge = [Num3]"
-			);
-
-			if (selected_port == PortType::Bridge) break;
-
-			int rotation = selected_rotation.get_value();
-			ImGui::SliderInt("Rotation", &rotation, 0, TileRotation::Count - 1, selected_rotation.to_string());
-			selected_rotation = TileRotation(static_cast<TileRotation::Value>(rotation));
-			imgui_tooltip("Rotation of the new port placed. Use [R] to quickly switch to the next rotation.");
-
-			break;
-		}
-		case ToolType::Clipboard:
-		{
-			static constexpr std::array ClipNames = { "Cut", "Copy", "Paste" };
-			int clip = static_cast<int>(selected_clip);
-			ImGui::SliderInt("Clipboard Type", &clip, 0, ClipNames.size() - 1, ClipNames[clip]);
-			selected_clip = static_cast<ClipType>(clip);
-
-			imgui_tooltip(
-				"Currently selected clipboard tool. Drag over area to highlight tiles to copy."
-				"Can also be switched with button shortcuts: Cut = [X], Copy = [C], Paste = [V]"
-			);
-
-			if (selected_buffer != nullptr)
-			{
-				if (selected_clip == ClipType::Paste)
-				{
-					TileRotation rotation = selected_buffer->get_rotation();
-
-					int value = rotation.get_value();
-					ImGui::SliderInt("Rotation", &value, 0, TileRotation::Count - 1, rotation.to_string());
-					selected_buffer->set_rotation(static_cast<TileRotation::Value>(value));
-					imgui_tooltip("Rotation of the pasting orientation. Use [R] to quickly switch to the next rotation.");
-				}
-
-				Int2 size = selected_buffer->size();
-				ImGui::Text("Copied buffer: %ux%u", size.x, size.y);
-			}
-			else ImGui::TextUnformatted("No copied clipboard buffer");
-		}
-		default: break;
-	}
 }
 
-void Cursor::execute_key()
+void Cursor::update_panning()
 {
 	Int2 view_input;
 	if (sf::Keyboard::isKeyPressed(sf::Keyboard::W)) view_input += Int2(0, 1);
@@ -436,31 +377,25 @@ void Cursor::execute_key()
 	Float2 reference = layer_view->get_point(Float2(0.0f));
 	delta.y *= layer_view->get_aspect_ratio();
 	layer_view->set_point(-delta, reference);
-	recalculate_mouse_point();
+	mouse_point = layer_view->get_point(mouse_percent);
 }
 
-void Cursor::execute_mouse(Int2 position)
+void Cursor::Tool::update_mouse()
 {
-	if (selected_buffer != nullptr) position = selected_buffer->get_position(mouse_point);
-	bool button = sf::Mouse::isButtonPressed(sf::Mouse::Left);
+	Int2 size = get_placement_size();
+	Float2 offset = Float2(size - Int2(1)) / 2.0f;
+	Int2 position = Float2::floor(cursor.mouse_point - offset);
 
-	//Update mouse drag properties
-	if (button)
+	if (sf::Mouse::isButtonPressed(sf::Mouse::Left))
 	{
-		Int2 size = selected_buffer == nullptr ? Int2(1) : selected_buffer->size();
+		if (drag_type == DragType::None) drag_origin = position;
 
-		if (drag_type == DragType::None)
+		if (restrict_drag_axis())
 		{
-			drag_type = DragType::Origin;
-			drag_origin = position;
-			drag_position = position;
-		}
-		else
-		{
-			Int2 delta = position - drag_origin;
-			delta = delta.max(-delta); //Absolute value
+			Int2 delta = (position - drag_origin) / size;
+			position = delta * size + drag_origin;
 
-			if (delta.x > delta.y)
+			if (std::abs(delta.x) >= std::abs(delta.y))
 			{
 				drag_type = DragType::Horizontal;
 				drag_position = Int2(position.x, drag_origin.y);
@@ -470,159 +405,46 @@ void Cursor::execute_mouse(Int2 position)
 				drag_type = DragType::Vertical;
 				drag_position = Int2(drag_origin.x, position.y);
 			}
+
+			position = drag_position;
+		}
+		else
+		{
+			drag_type = DragType::Free;
+			drag_position = position;
 		}
 	}
-
-	//Execute mouse tool
-	if (selected_tool == ToolType::Mouse)
+	else
 	{
-		if (button)
+		if (mouse_pressed())
 		{
-			layer_view->set_point(mouse_percent, last_mouse_point);
-			recalculate_mouse_point();
+			Layer* layer = cursor.controller->get_layer();
+			assert(layer != nullptr);
+			commit(*layer);
 		}
 
-		if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
-		{
-			Layer* layer = controller->get_layer();
-			TileTag tile = layer->get(position);
-			if (tile.type == TileType::Wire) layer->get_engine().toggle_wire_strong_powered(tile.index);
-		}
-
-		return;
+		drag_type = DragType::None;
 	}
 
-	//Draw selected tool
-	switch (selected_tool)
-	{
-		case ToolType::WirePlacement:
-		{
-			Bounds bounds(position);
-
-			if (button)
-			{
-				position = drag_position;
-				bounds = Bounds::encapsulate(drag_origin, position);
-			}
-
-			draw_selection(bounds, button, Wire::ColorUnpowered);
-			break;
-		}
-		case ToolType::PortPlacement:
-		{
-			uint32_t color;
-
-			if (selected_port == PortType::Transistor) color = Gate::ColorTransistor;
-			else if (selected_port == PortType::Inverter) color = Gate::ColorInverter;
-			else if (selected_port == PortType::Bridge) color = Bridge::Color;
-			else throw std::domain_error("Bad PortType.");
-
-			if (button) position = drag_origin;
-			draw_selection(Bounds(position), button, color);
-
-			if (selected_port != PortType::Bridge)
-			{
-				constexpr float Extend = 0.15f;
-				constexpr float Offset = 0.5f - Extend;
-
-				Float2 origin = Float2(position) + Float2(0.5f);
-				Float2 direction(selected_rotation.get_direction());
-				draw_rectangle(origin + direction * Offset, Float2(Extend), Gate::ColorDisabled);
-			}
-
-			break;
-		}
-		case ToolType::TileRemoval:
-		{
-			Bounds bounds(position);
-			if (button) bounds = Bounds::encapsulate(drag_origin, position);
-			draw_removal(bounds, button);
-			break;
-		}
-		case ToolType::Clipboard:
-		{
-			if (selected_clip == ClipType::Paste)
-			{
-				if (selected_buffer == nullptr) break;
-
-				static constexpr uint32_t ColorBackground = make_color(0, 0, 0);
-				position = selected_buffer->get_position(mouse_point);
-
-				if (not button)
-				{
-					Bounds bounds(position, position + selected_buffer->size());
-					draw_selection(bounds, button, ColorBackground);
-					selected_buffer->draw(position, *draw_context, *layer_view);
-
-					break;
-				}
-
-				Int2 size = selected_buffer->size();
-
-				if (drag_type == DragType::Origin)
-				{
-					drag_origin = position;
-					drag_position = position;
-				}
-				else
-				{
-					Int2 offset = position - drag_origin;
-					offset = offset / size * size;
-					position = offset + drag_origin;
-
-					if (offset == Int2())
-					{
-						drag_type = DragType::Origin;
-						drag_position = position;
-					}
-					else if (offset.x > offset.y)
-					{
-						drag_type = DragType::Horizontal;
-						drag_position = Int2(position.x, drag_origin.y);
-					}
-					else
-					{
-						drag_type = DragType::Vertical;
-						drag_position = Int2(drag_origin.x, position.y);
-					}
-				}
-
-				position = drag_position;
-
-				Bounds bounds = Bounds::encapsulate(drag_origin, position);
-				bounds = Bounds(bounds.get_min(), bounds.get_max() + size);
-				draw_selection(bounds, button, make_color(0, 0, 0));
-
-				//				Int2 min = draw_position;
-				//				Bounds bounds(min, min + selected_buffer->size());
-				//
-				//				selected_buffer->draw(min, *draw_context, *layer_view);
-			}
-			else
-			{
-				Bounds bounds(position);
-				if (button) bounds = Bounds::encapsulate(drag_origin, position);
-				if (selected_clip == ClipType::Cut) draw_removal(bounds, button);
-				else draw_selection(bounds, button, make_color(210, 205, 220, 35));
-			}
-
-			break;
-		}
-		default: break;
-	}
+	update(position);
 }
 
-void Cursor::draw_rectangle(Float2 center, Float2 extend, uint32_t color)
+void Cursor::Tool::draw_rectangle(Float2 center, Float2 extend, uint32_t color)
 {
-	rectangle->setPosition(center.x - extend.x, center.y - extend.y);
-	rectangle->setSize(sf::Vector2f(extend.x, extend.y) * 2.0f);
-	rectangle->setFillColor(sf::Color(color));
-	window.draw(*rectangle, layer_view->get_render_states());
+	Float2 min = center - extend;
+	Float2 max = center + extend;
+	std::array<sf::Vertex, 4> vertices = { sf::Vertex(sf::Vector2f(min.x, min.y), sf::Color(color)),
+	                                       sf::Vertex(sf::Vector2f(max.x, min.y), sf::Color(color)),
+	                                       sf::Vertex(sf::Vector2f(max.x, max.y), sf::Color(color)),
+	                                       sf::Vertex(sf::Vector2f(min.x, max.y), sf::Color(color)) };
+
+	auto render_states = cursor.layer_view->get_render_states();
+	cursor.window.draw(vertices.data(), vertices.size(), sf::PrimitiveType::Quads, render_states);
 }
 
 static std::array<sf::Vertex, 5> get_vertices_border(Bounds bounds, bool highlight)
 {
-	sf::Color color(make_color(230, 225, 240, highlight ? 255 : 160));
+	sf::Color color(make_color(230, 225, 240, highlight ? 255 : 200));
 	Float2 min(bounds.get_min());
 	Float2 max(bounds.get_max());
 
@@ -631,178 +453,69 @@ static std::array<sf::Vertex, 5> get_vertices_border(Bounds bounds, bool highlig
 	         sf::Vertex(sf::Vector2f(min.x, min.y), color) };
 }
 
-void Cursor::draw_selection(Bounds bounds, bool highlight, uint32_t color)
+void Cursor::Tool::draw_selection(Bounds bounds, uint32_t color)
 {
-	auto vertices = get_vertices_border(bounds, highlight);
 	draw_rectangle(bounds.center(), bounds.extend(), color);
-	window.draw(vertices.data(), 5, sf::PrimitiveType::LineStrip, layer_view->get_render_states());
+
+	auto vertices = get_vertices_border(bounds, mouse_pressed());
+	auto render_states = cursor.layer_view->get_render_states();
+	cursor.window.draw(vertices.data(), 5, sf::PrimitiveType::LineStrip, render_states);
 }
 
-void Cursor::draw_removal(Bounds bounds, bool highlight)
+void Cursor::Tool::draw_removal(Bounds bounds)
 {
-	auto vertices = get_vertices_border(bounds, highlight);
+	draw_selection(bounds, make_color(220, 10, 30, 50));
+
+	auto vertices = get_vertices_border(bounds, mouse_pressed());
+	auto render_states = cursor.layer_view->get_render_states();
 	std::swap(vertices[1], vertices[2]);
-
-	draw_selection(bounds, highlight, make_color(220, 10, 30, 35));
-	window.draw(vertices.data(), 4, sf::PrimitiveType::Lines, layer_view->get_render_states());
+	cursor.window.draw(vertices.data(), 4, sf::PrimitiveType::Lines, render_states);
 }
 
-void Cursor::execute_key_event(const sf::Event& event)
+bool Cursor::MouseTool::request_activation(const sf::Event& event)
 {
-	assert(event.type == sf::Event::KeyPressed);
-	sf::Keyboard::Key code = event.key.code;
+	return event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Right;
+}
 
-	switch (event.key.code)
+void Cursor::MouseTool::update(Int2 position)
+{
+	if (mouse_pressed())
 	{
-		case sf::Keyboard::E:
-		{
-			selected_tool = ToolType::WirePlacement;
-			break;
-		}
-		case sf::Keyboard::Q:
-		{
-			selected_tool = ToolType::TileRemoval;
-			break;
-		}
-		case sf::Keyboard::R:
-		{
-			if (drag_type != DragType::None) break;
+		cursor.layer_view->set_point(cursor.mouse_percent, cursor.last_mouse_point);
+		cursor.mouse_point = cursor.layer_view->get_point(cursor.mouse_percent);
+	}
 
-			if (selected_tool == ToolType::PortPlacement && selected_port != PortType::Bridge)
-			{
-				selected_rotation = selected_rotation.get_next();
-			}
-
-			if (selected_tool == ToolType::Clipboard && selected_clip == ClipType::Paste && selected_buffer != nullptr)
-			{
-				TileRotation rotation = selected_buffer->get_rotation();
-				selected_buffer->set_rotation(rotation.get_next());
-			}
-
-			break;
-		}
-		case sf::Keyboard::Num1:
-		case sf::Keyboard::Num2:
-		case sf::Keyboard::Num3:
-		{
-			selected_tool = ToolType::PortPlacement;
-
-			if (code == sf::Keyboard::Num1) selected_port = PortType::Transistor;
-			else if (code == sf::Keyboard::Num2) selected_port = PortType::Inverter;
-			else if (code == sf::Keyboard::Num3) selected_port = PortType::Bridge;
-			break;
-		}
-		case sf::Keyboard::X:
-		case sf::Keyboard::C:
-		case sf::Keyboard::V:
-		{
-			selected_tool = ToolType::Clipboard;
-
-			if (code == sf::Keyboard::X) selected_clip = ClipType::Cut;
-			else if (code == sf::Keyboard::C) selected_clip = ClipType::Copy;
-			else if (code == sf::Keyboard::V) selected_clip = ClipType::Paste;
-			break;
-		}
-		default: break;
+	if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
+	{
+		Layer* layer = cursor.controller->get_layer();
+		TileTag tile = layer->get(position);
+		if (tile.type == TileType::Wire) layer->get_engine().toggle_wire_strong_powered(tile.index);
 	}
 }
 
-void Cursor::execute_mouse_event(const sf::Event& event)
+bool Cursor::WireTool::request_activation(const sf::Event& event)
 {
-	const auto& mouse = event.mouseButton;
-	Layer* layer = controller->get_layer();
-
-	switch (event.type)
-	{
-		case sf::Event::MouseButtonPressed:
-		{
-			if (mouse.button == sf::Mouse::Right) selected_tool = ToolType::Mouse;
-			if (mouse.button != sf::Mouse::Left || layer == nullptr) break;
-
-			switch (selected_tool)
-			{
-				case ToolType::WirePlacement: break;
-				case ToolType::PortPlacement: break;
-				case ToolType::TileRemoval: break;
-				case ToolType::Clipboard:
-				{
-					if (selected_clip != ClipType::Paste || selected_buffer == nullptr) break;
-					Int2 position = selected_buffer->get_position(mouse_point);
-					layer->erase({ position, position + selected_buffer->size() });
-					selected_buffer->paste(position, *layer);
-
-					break;
-				}
-				default: break;
-			}
-
-			break;
-		}
-		case sf::Event::MouseButtonReleased:
-		{
-			if (mouse.button != sf::Mouse::Left || drag_type == DragType::None) break;
-
-			Int2 position;
-			if (layer == nullptr || not try_get_mouse_position(position))
-			{
-				drag_type = DragType::None;
-				break;
-			}
-
-			switch (selected_tool)
-			{
-				case ToolType::WirePlacement:
-				{
-					place_wire(position);
-					break;
-				}
-				case ToolType::PortPlacement:
-				{
-					place_port(position);
-					break;
-				}
-				case ToolType::TileRemoval:
-				{
-					layer->erase(Bounds::encapsulate(position, drag_origin));
-					break;
-				}
-				case ToolType::Clipboard:
-				{
-					if (selected_clip == ClipType::Paste)
-					{
-						if (selected_buffer == nullptr) break;
-
-						position = selected_buffer->get_position(mouse_point);
-						layer->erase({ position, position + selected_buffer->size() });
-						selected_buffer->paste(position, *layer);
-					}
-					else
-					{
-						Bounds bounds = Bounds::encapsulate(position, drag_origin);
-						selected_buffer = std::make_unique<ClipBuffer>(*layer, bounds);
-						if (selected_clip == ClipType::Cut) layer->erase(bounds);
-					}
-
-					break;
-				}
-				default: break;
-			}
-
-			drag_type = DragType::None;
-			break;
-		}
-		default: break;
-	}
+	return event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::E;
 }
 
-void Cursor::place_wire(Int2 position)
+void Cursor::WireTool::update_interface()
 {
-	Layer& layer = *controller->get_layer();
+	ImGui::Checkbox("Auto Bridge Placement", &selected_auto_bridge);
+	imgui_tooltip("Whether to automatically place bridges at wire junctions (i.e. tiles with more than two wire neighbors)");
+}
 
-	assert(drag_type != DragType::None);
+void Cursor::WireTool::update(Int2 position)
+{
+	Bounds bounds(position);
+	if (mouse_pressed()) bounds = Bounds::encapsulate(drag_origin, position);
+	draw_selection(bounds, Wire::ColorUnpowered);
+}
+
+void Cursor::WireTool::commit(Layer& layer)
+{
 	bool horizontal = drag_type == DragType::Horizontal;
-	auto drag = horizontal ? std::make_pair(drag_origin.x, position.x)
-	                       : std::make_pair(drag_origin.y, position.y);
+	auto drag = horizontal ? std::make_pair(drag_origin.x, drag_position.x)
+	                       : std::make_pair(drag_origin.y, drag_position.y);
 
 	if (drag.first > drag.second) std::swap(drag.first, drag.second);
 	Int2 other_axis = horizontal ? Int2(0, 1) : Int2(1, 0);
@@ -836,9 +549,82 @@ void Cursor::place_wire(Int2 position)
 	}
 }
 
-void Cursor::place_port(Int2 position)
+void Cursor::DeviceTool::update_interface()
 {
-	Layer& layer = *controller->get_layer();
+	int type = static_cast<int>(selected_type);
+	static constexpr std::array TypeNames = { "Transistor", "Inverter", "Bridge" };
+	ImGui::SliderInt("Device", &type, 0, TypeNames.size() - 1, TypeNames[type]);
+	selected_type = static_cast<Type>(type);
+
+	imgui_tooltip(
+		"Currently selected device to place. Can also be switched with button shortcuts: "
+		"Transistor = [Num1], Inverter = [Num2], Bridge = [Num3]"
+	);
+
+	if (selected_type != Type::Bridge)
+	{
+		int rotation = selected_rotation.get_value();
+		ImGui::SliderInt("Rotation", &rotation, 0, TileRotation::Count - 1, selected_rotation.to_string());
+		selected_rotation = TileRotation(static_cast<TileRotation::Value>(rotation));
+		imgui_tooltip("Rotation of the new device placed. Use [R] to quickly switch to the next rotation.");
+	}
+}
+
+bool Cursor::DeviceTool::request_activation(const sf::Event& event)
+{
+	if (event.type != sf::Event::KeyPressed) return false;
+
+	auto code = event.key.code;
+	switch (code)
+	{
+		case sf::Keyboard::Num1:
+		case sf::Keyboard::Num2:
+		case sf::Keyboard::Num3:
+		{
+			if (code == sf::Keyboard::Num1) selected_type = Type::Transistor;
+			if (code == sf::Keyboard::Num2) selected_type = Type::Inverter;
+			if (code == sf::Keyboard::Num3) selected_type = Type::Bridge;
+			return true;
+		}
+		default: return false;
+	}
+}
+
+void Cursor::DeviceTool::input_event(const sf::Event& event)
+{
+	Tool::input_event(event);
+	if (mouse_pressed()) return;
+
+	if (event.type != sf::Event::KeyPressed || event.key.code != sf::Keyboard::R) return;
+	selected_rotation = selected_rotation.get_next();
+}
+
+void Cursor::DeviceTool::update(Int2 position)
+{
+	uint32_t color;
+
+	if (selected_type == Type::Transistor) color = Gate::ColorTransistor;
+	else if (selected_type == Type::Inverter) color = Gate::ColorInverter;
+	else if (selected_type == Type::Bridge) color = Bridge::Color;
+	else throw std::domain_error("Bad PortType.");
+
+	if (mouse_pressed()) position = drag_origin;
+	draw_selection(Bounds(position), color);
+
+	if (selected_type != Type::Bridge)
+	{
+		constexpr float Extend = 0.15f;
+		constexpr float Offset = 0.5f - Extend;
+
+		Float2 origin = Float2(position) + Float2(0.5f);
+		Float2 direction(selected_rotation.get_direction());
+		draw_rectangle(origin + direction * Offset, Float2(Extend), Gate::ColorDisabled);
+	}
+}
+
+void Cursor::DeviceTool::commit(Layer& layer)
+{
+	Int2 position = drag_origin;
 	TileTag tile = layer.get(position);
 
 	if (tile.type == TileType::Wire)
@@ -847,14 +633,14 @@ void Cursor::place_port(Int2 position)
 		tile = TileTag();
 	}
 
-	if (selected_port == PortType::Bridge)
+	if (selected_type == Type::Bridge)
 	{
 		if (tile.type != TileType::None) return;
 		Bridge::insert(layer, position);
 	}
 	else
 	{
-		auto type = selected_port == PortType::Transistor ? Gate::Type::Transistor : Gate::Type::Inverter;
+		auto type = selected_type == Type::Transistor ? Gate::Type::Transistor : Gate::Type::Inverter;
 
 		if (tile.type == TileType::Gate)
 		{
@@ -869,11 +655,162 @@ void Cursor::place_port(Int2 position)
 	}
 }
 
-Cursor::ClipBuffer::ClipBuffer(const Layer& source, Bounds bounds) :
+bool Cursor::RemovalTool::request_activation(const sf::Event& event)
+{
+	return event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::Q;
+}
+
+void Cursor::RemovalTool::update(Int2 position)
+{
+	Bounds bounds(position);
+	if (mouse_pressed()) bounds = Bounds::encapsulate(drag_origin, position);
+	draw_removal(bounds);
+}
+
+void Cursor::RemovalTool::commit(Layer& layer)
+{
+	layer.erase(Bounds::encapsulate(drag_position, drag_origin));
+}
+
+Cursor::ClipboardTool::ClipboardTool(const Cursor& cursor) :
+	Tool(cursor), layer_view(*cursor.layer_view),
+	draw_context(std::make_unique<DrawContext>(cursor.application.get_shaders())) {}
+
+void Cursor::ClipboardTool::update_interface()
+{
+	int type = static_cast<int>(selected_type);
+	static constexpr std::array TypeNames = { "Cut", "Copy", "Paste" };
+	ImGui::SliderInt("Clipboard Type", &type, 0, TypeNames.size() - 1, TypeNames[type]);
+	selected_type = static_cast<Type>(type);
+
+	imgui_tooltip(
+		"Currently selected clipboard tool. Drag over area to highlight tiles to copy."
+		"Can also be switched with button shortcuts: Cut = [X], Copy = [C], Paste = [V]"
+	);
+
+	if (buffer != nullptr)
+	{
+		if (selected_type == Type::Paste)
+		{
+			TileRotation rotation = buffer->get_rotation();
+
+			int value = rotation.get_value();
+			ImGui::SliderInt("Rotation", &value, 0, TileRotation::Count - 1, rotation.to_string());
+			buffer->set_rotation(static_cast<TileRotation::Value>(value));
+
+			imgui_tooltip("Rotation of the pasting orientation. Use [R] to quickly switch to the next rotation.");
+		}
+
+		Int2 size = buffer->size();
+		ImGui::Text("Copied buffer: %ux%u", size.x, size.y);
+	}
+	else ImGui::TextUnformatted("No copied clipboard buffer");
+}
+
+bool Cursor::ClipboardTool::request_activation(const sf::Event& event)
+{
+	if (event.type != sf::Event::KeyPressed) return false;
+
+	auto code = event.key.code;
+	switch (code)
+	{
+		case sf::Keyboard::X:
+		case sf::Keyboard::C:
+		case sf::Keyboard::V:
+		{
+			if (code == sf::Keyboard::X) selected_type = Type::Cut;
+			if (code == sf::Keyboard::C) selected_type = Type::Copy;
+			if (code == sf::Keyboard::V) selected_type = Type::Paste;
+			return true;
+		}
+		default: return false;
+	}
+}
+
+void Cursor::ClipboardTool::input_event(const sf::Event& event)
+{
+	Tool::input_event(event);
+	if (mouse_pressed()) return;
+
+	if (event.type != sf::Event::KeyPressed || event.key.code != sf::Keyboard::R) return;
+	buffer->set_rotation(buffer->get_rotation().get_next());
+}
+
+Int2 Cursor::ClipboardTool::get_placement_size() const
+{
+	if (selected_type != Type::Paste) return Tool::get_placement_size();
+	return buffer == nullptr ? Tool::get_placement_size() : buffer->size();
+}
+
+bool Cursor::ClipboardTool::restrict_drag_axis() const
+{
+	return selected_type == Type::Paste && buffer != nullptr;
+}
+
+void Cursor::ClipboardTool::update(Int2 position)
+{
+	if (selected_type == Type::Paste)
+	{
+		if (buffer == nullptr) return;
+
+		static constexpr uint32_t ColorBackground = make_color(0, 0, 0);
+
+		if (mouse_pressed())
+		{
+			Int2 min = drag_origin.min(position);
+			Int2 max = drag_origin.max(position);
+			Int2 size = buffer->size();
+
+			draw_selection(Bounds(min, max + size), ColorBackground);
+
+			(drag_type == DragType::Horizontal ? size.y : size.x) = 0;
+			do buffer->draw(min, *draw_context, layer_view);
+			while ((min += size) <= max);
+		}
+		else
+		{
+			Bounds bounds(position, position + buffer->size());
+			draw_selection(bounds, ColorBackground);
+			buffer->draw(position, *draw_context, layer_view);
+		}
+	}
+	else
+	{
+		Bounds bounds(position);
+		if (mouse_pressed()) bounds = Bounds::encapsulate(drag_origin, position);
+
+		if (selected_type == Type::Cut) draw_removal(bounds);
+		else draw_selection(bounds, make_color(210, 205, 220, 50));
+	}
+}
+
+void Cursor::ClipboardTool::commit(Layer& layer)
+{
+	if (selected_type == Type::Paste)
+	{
+		if (buffer == nullptr) return;
+
+		Int2 min = drag_origin.min(drag_position);
+		Int2 max = drag_origin.max(drag_position);
+		Int2 size = buffer->size();
+
+		(drag_type == DragType::Horizontal ? size.y : size.x) = 0;
+		do buffer->paste(min, layer);
+		while ((min += size) <= max);
+	}
+	else
+	{
+		Bounds bounds = Bounds::encapsulate(drag_position, drag_origin);
+		buffer = std::make_unique<Buffer>(layer, bounds);
+		if (selected_type == Type::Cut) layer.erase(bounds);
+	}
+}
+
+Cursor::ClipboardTool::Buffer::Buffer(const Layer& source, Bounds bounds) :
 	buffer(std::make_unique<Layer>(source.copy(bounds))),
 	bounds(bounds), rotation(TileRotation::Angle0) {}
 
-void Cursor::ClipBuffer::paste(Int2 position, Layer& layer) const
+void Cursor::ClipboardTool::Buffer::paste(Int2 position, Layer& layer) const
 {
 	//Precalculate transformation parameters
 	Int2 one_less = size() - Int2(1);
@@ -930,7 +867,7 @@ void Cursor::ClipBuffer::paste(Int2 position, Layer& layer) const
 	}
 }
 
-void Cursor::ClipBuffer::draw(Int2 position, DrawContext& context, const LayerView& layer_view) const
+void Cursor::ClipboardTool::Buffer::draw(Int2 position, DrawContext& context, const LayerView& layer_view) const
 {
 	Float2 offset = bounds.extend() + Float2(bounds.get_min());
 	offset = rotation.rotate(offset);
@@ -1280,5 +1217,4 @@ uint32_t TickControl::execute(Engine& engine, uint64_t count)
 	executed += total;
 	return count;
 }
-
 }

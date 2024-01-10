@@ -166,101 +166,69 @@ public:
 	void update() override;
 	void input_event(const sf::Event& event) override;
 
-	bool try_get_mouse_position(Int2& position) const;
+	bool try_get_mouse_position(Int2& position) const
+	{
+		if (not application.handle_mouse()) return false;
+		position = Float2::floor(mouse_point);
+		return true;
+	}
 
 private:
-	enum class ToolType : uint8_t
-	{
-		Mouse,
-		WirePlacement,
-		PortPlacement,
-		TileRemoval,
-		Clipboard
-	};
-
-	enum class PortType : uint8_t
-	{
-		Transistor,
-		Inverter,
-		Bridge
-	};
-
-	enum class ClipType : uint8_t
-	{
-		Cut,
-		Copy,
-		Paste
-	};
-
-	enum class DragType : uint8_t
-	{
-		None,
-		Origin,
-		Vertical,
-		Horizontal
-	};
-
-	class ClipBuffer;
-
-	void recalculate_mouse_point() { mouse_point = layer_view->get_point(mouse_percent); }
+	class Tool;
+	class MouseTool;
+	class WireTool;
+	class DeviceTool;
+	class RemovalTool;
+	class ClipboardTool;
 
 	void update_interface();
-
-	void execute_key();
-	void execute_mouse(Int2 position);
-
-	void draw_rectangle(Float2 center, Float2 extend, uint32_t color);
-	void draw_selection(Bounds bounds, bool highlight, uint32_t color);
-	void draw_removal(Bounds bounds, bool highlight);
-
-	void execute_key_event(const sf::Event& event);
-	void execute_mouse_event(const sf::Event& event);
-
-	void place_wire(Int2 position);
-	void place_port(Int2 position);
+	void update_panning();
 
 	Controller* controller{};
 	LayerView* layer_view{};
+	std::vector<std::unique_ptr<Tool>> tools;
 
 	Float2 mouse_percent;
 	Float2 mouse_point;
 	Float2 last_mouse_point;
 
 	float selected_pan_sensitivity = 0.5f;
-	ToolType selected_tool = ToolType::Mouse;
-	PortType selected_port = PortType::Transistor;
-	ClipType selected_clip = ClipType::Copy;
-
-	bool selected_auto_bridge = false;
-	TileRotation selected_rotation;
-	std::unique_ptr<ClipBuffer> selected_buffer;
-
-	DragType drag_type = DragType::None;
-	Int2 drag_origin;
-	Int2 drag_position;
-
-	std::unique_ptr<sf::RectangleShape> rectangle;
-	std::unique_ptr<DrawContext> draw_context;
+	uint32_t selected_tool = 0;
 };
 
 class Cursor::Tool
 {
 public:
-	[[nodiscard]] virtual Int2 get_placement_size() const { return Int2(1); }
+	explicit Tool(const Cursor& cursor) : cursor(cursor) {}
+
+	virtual ~Tool() = default;
+
+	void update_mouse();
+	void deactivate() { drag_type = DragType::None; }
 
 	virtual void update_interface() = 0;
-	virtual void execute_mouse(Int2 position) = 0;
+	virtual bool request_activation(const sf::Event& event) = 0;
+	virtual void input_event(const sf::Event& event) {};
 
 protected:
 	enum class DragType : uint8_t
 	{
 		None,
-		Origin,
+		Free,
 		Vertical,
 		Horizontal
 	};
 
-	explicit Tool(const Cursor& cursor) : cursor(cursor) {}
+	[[nodiscard]] virtual Int2 get_placement_size() const { return Int2(1); }
+	[[nodiscard]] virtual bool restrict_drag_axis() const { return true; }
+	[[nodiscard]] bool mouse_pressed() const { return drag_type != DragType::None; }
+
+	virtual void update(Int2 position) = 0;
+	virtual void commit(Layer& layer) = 0;
+
+	void draw_rectangle(Float2 center, Float2 extend, uint32_t color);
+	void draw_selection(Bounds bounds, uint32_t color);
+	void draw_removal(Bounds bounds);
 
 	DragType drag_type = DragType::None;
 	Int2 drag_origin;
@@ -270,10 +238,115 @@ private:
 	const Cursor& cursor;
 };
 
-class Cursor::ClipBuffer
+class Cursor::MouseTool : public Tool
 {
 public:
-	ClipBuffer(const Layer& source, Bounds bounds);
+	explicit MouseTool(Cursor& cursor) : Tool(cursor), cursor(cursor) {}
+
+	void update_interface() override {}
+	bool request_activation(const sf::Event& event) override;
+
+protected:
+	void update(Int2 position) override;
+	void commit(Layer& layer) override {}
+
+private:
+	Cursor& cursor;
+};
+
+class Cursor::WireTool : public Tool
+{
+public:
+	explicit WireTool(const Cursor& cursor) : Tool(cursor) {}
+
+	void update_interface() override;
+	bool request_activation(const sf::Event& event) override;
+
+protected:
+	void update(Int2 position) override;
+	void commit(Layer& layer) override;
+
+private:
+	bool selected_auto_bridge = false;
+};
+
+class Cursor::DeviceTool : public Tool
+{
+public:
+	explicit DeviceTool(const Cursor& cursor) : Tool(cursor) {}
+
+	void update_interface() override;
+	bool request_activation(const sf::Event& event) override;
+	void input_event(const sf::Event& event) override;
+
+protected:
+	void update(Int2 position) override;
+	void commit(Layer& layer) override;
+
+private:
+	enum class Type : uint8_t
+	{
+		Transistor,
+		Inverter,
+		Bridge
+	};
+
+	Type selected_type = Type::Transistor;
+	TileRotation selected_rotation;
+};
+
+class Cursor::RemovalTool : public Tool
+{
+public:
+	explicit RemovalTool(const Cursor& cursor) : Tool(cursor) {}
+
+	void update_interface() override {}
+	bool request_activation(const sf::Event& event) override;
+
+protected:
+	[[nodiscard]] bool restrict_drag_axis() const override { return false; }
+
+	void update(Int2 position) override;
+	void commit(Layer& layer) override;
+};
+
+class Cursor::ClipboardTool : public Tool
+{
+public:
+	explicit ClipboardTool(const Cursor& cursor);
+
+	void update_interface() override;
+	bool request_activation(const sf::Event& event) override;
+	void input_event(const sf::Event& event) override;
+
+protected:
+	[[nodiscard]] Int2 get_placement_size() const override;
+	[[nodiscard]] bool restrict_drag_axis() const override;
+
+	void update(Int2 position) override;
+	void commit(Layer& layer) override;
+
+private:
+	enum class Type : uint8_t
+	{
+		Cut,
+		Copy,
+		Paste
+	};
+
+	class Buffer;
+
+	LayerView& layer_view;
+	std::unique_ptr<DrawContext> draw_context;
+
+	Type selected_type = Type::Copy;
+	std::unique_ptr<Buffer> buffer;
+};
+
+class Cursor::ClipboardTool::Buffer
+{
+public:
+	Buffer(const Layer& source, Bounds bounds);
 
 	[[nodiscard]] Int2 size() const
 	{
