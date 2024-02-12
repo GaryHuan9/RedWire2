@@ -3,6 +3,7 @@
 #include "main.hpp"
 
 #include <sstream>
+#include <algorithm>
 #include <unordered_set>
 
 namespace rw

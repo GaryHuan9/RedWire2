@@ -252,7 +252,7 @@ void RecyclingList<T, Allocator>::reserve(size_t threshold)
 	if (threshold <= capacity) return;
 
 	//Calculate new capacity
-	size_t new_capacity = std::max(capacity * 2, 8LLu);
+	size_t new_capacity = std::max<size_t>(capacity * 2, 16LLu);
 	while (new_capacity < threshold) new_capacity *= 2;
 	T* new_items = allocator.allocate(new_capacity);
 
