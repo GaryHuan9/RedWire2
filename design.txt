@@ -16,13 +16,20 @@ V begin work on wire update engine (basic)
 V support copy and pasting (basic)
 V support saving and loading files (basic)
 - add a layer of indirection between wire index and wire state
+- begin basic experimenting with graph optimization techniques
+- feature to allow comments or design scratch notes in app
 - add greedy meshing (single axis or both axis?)
 - add vertex buffer batching between chunks
 - add modules system
 
 IMPROVEMENTS:
-- switch wire placement to only commit on release (reduce snapping to wrong axis)
+V switch wire placement to only commit on release (reduce snapping to wrong axis)
 - create and use PositionMap and PositionSet to accelerate searching
+- use https://github.com/mateidavid/zstr for stream compression
+- RecyclingList can use a bit-tree structure for fast occupancy information
+
+IDEAS:
+- a new kind of bridge (or integrate with existing bridge) to allow Factorio style jumps
 
 module ModuleName
 (
@@ -37,3 +44,14 @@ module ModuleName
     and ModuleWireName0 InputWireName0 InputWireName1;
     xnor ModuleWireName1 InputWireName0 InputWireName1;
 }
+
+calculator planning:
+states:
+0 = waiting for digit
+1 = digit button down
+2 = display result
+
+TODO: don't need the input to the shift registers from the result because
+1) we can simply display the result and
+2) the accumulator is already there
+so we can remove that complicated thing where we have to store to display

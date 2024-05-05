@@ -794,6 +794,8 @@ void Cursor::ClipboardTool::commit(Layer& layer)
 		Int2 max = drag_origin.max(drag_position);
 		Int2 size = buffer->size();
 
+		layer.erase(Bounds(min, max + size));
+
 		(drag_type == DragType::Horizontal ? size.y : size.x) = 0;
 		do buffer->paste(min, layer);
 		while ((min += size) <= max);
