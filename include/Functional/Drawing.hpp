@@ -182,12 +182,16 @@ public:
 private:
 	struct QuadVertex
 	{
+		QuadVertex(Float2 position, uint32_t color) : position(position), color(color) {}
+
 		Float2 position;
 		uint32_t color{};
 	};
 
 	struct WireVertex
 	{
+		WireVertex(Float2 position, uint32_t index) : position(position), index(index) {}
+
 		Float2 position;
 		uint32_t index{};
 	};

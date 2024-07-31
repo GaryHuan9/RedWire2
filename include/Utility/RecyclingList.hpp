@@ -200,7 +200,7 @@ void RecyclingList<T, Allocator>::erase(Index index)
 	--count;
 
 	//Updates ranges
-	using Iterator = decltype(ranges)::iterator;
+	using Iterator = typename decltype(ranges)::iterator;
 	Iterator previous = ranges.end();
 	Iterator next = ranges.end();
 

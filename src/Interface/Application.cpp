@@ -22,7 +22,7 @@ Application::Application()
 	sf::ContextSettings settings;
 	settings.antialiasingLevel = 16;
 	settings.majorVersion = 4;
-//	settings.attributeFlags = sf::ContextSettings::Core;
+	settings.attributeFlags = sf::ContextSettings::Core;
 
 	window = std::make_unique<sf::RenderWindow>(video_mode, "RedWire2", sf::Style::Default, settings);
 	window->setVerticalSyncEnabled(true);

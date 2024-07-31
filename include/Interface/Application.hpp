@@ -23,7 +23,7 @@ public:
 	[[nodiscard]] T* find_component() const
 	{
 		auto predicate = [](const auto& value) { return typeid(*value) == typeid(T); };
-		auto iterator = std::ranges::find_if(components, predicate);
+		auto iterator = std::find_if(components.begin(), components.end(), predicate);
 		return iterator == components.end() ? nullptr : static_cast<T*>(iterator->get());
 	}
 
@@ -38,7 +38,7 @@ public:
 	T* make_component(Arguments&& ... arguments)
 	{
 		auto predicate = [](const auto& value) { return typeid(*value) == typeid(T); };
-		size_t count = std::ranges::count_if(components, predicate);
+		size_t count = std::count_if(components.begin(), components.end(), predicate);
 		if (count != 0) throw std::invalid_argument("Already added component.");
 
 		auto component = std::make_unique<T>(*this, std::forward<Arguments>(arguments)...);

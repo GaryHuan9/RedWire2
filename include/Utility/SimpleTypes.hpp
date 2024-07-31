@@ -247,7 +247,7 @@ template<class T, class... Ts>
 class TypeSet
 {
 public:
-	template<template<class> class Wrapper>
+	template<template<class, class...> class Wrapper>
 	class Wrap;
 
 	template<class U>
@@ -273,7 +273,7 @@ public:
 };
 
 template<class T, class... Ts>
-template<template<class> class Wrapper>
+template<template<class, class...> class Wrapper>
 class TypeSet<T, Ts...>::Wrap
 {
 public:
@@ -464,7 +464,7 @@ inline BinaryReader& operator>>(BinaryReader& reader, Index& value)
 }
 
 template<class T, class... Ts>
-template<template<class> class Wrapper>
+template<template<class, class...> class Wrapper>
 void TypeSet<T, Ts...>::Wrap<Wrapper>::write(BinaryWriter& writer) const
 {
 	auto write = [&writer]<class U>(const U& value) { writer << value; };
@@ -472,7 +472,7 @@ void TypeSet<T, Ts...>::Wrap<Wrapper>::write(BinaryWriter& writer) const
 }
 
 template<class T, class... Ts>
-template<template<class> class Wrapper>
+template<template<class, class...> class Wrapper>
 void TypeSet<T, Ts...>::Wrap<Wrapper>::read(BinaryReader& reader)
 {
 	auto read = [&reader]<class U>(U& value) { reader >> value; };
