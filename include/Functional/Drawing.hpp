@@ -154,10 +154,10 @@ class ShaderResources : NonCopyable
 public:
 	ShaderResources();
 
-	[[nodiscard]] sf::Shader* get_shader(bool quad) const;
+//	[[nodiscard]] sf::Shader* get_shader(bool quad) const;
 
 private:
-	std::unique_ptr<std::array<sf::Shader, 2>> data;
+//	std::unique_ptr<std::array<sf::Shader, 2>> data;
 };
 
 class DrawContext : NonCopyable
@@ -198,8 +198,8 @@ private:
 
 	void set_shader_parameters() const;
 
-	sf::Shader* shader_quad;
-	sf::Shader* shader_wire;
+//	sf::Shader* shader_quad;
+//	sf::Shader* shader_wire;
 
 	std::vector<QuadVertex> vertices_quad;
 	std::vector<WireVertex> vertices_wire;

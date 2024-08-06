@@ -45,7 +45,7 @@ public:
 
 	void initialize() override;
 	void update() override;
-	void input_event(const sf::Event& event) override;
+//	void input_event(const sf::Event& event) override;
 
 	[[nodiscard]] Float2 get_min() const { return center - extend; }
 
@@ -64,7 +64,7 @@ public:
 		return center + extend * percent;
 	}
 
-	[[nodiscard]] const sf::RenderStates& get_render_states() const { return *render_states; }
+//	[[nodiscard]] const sf::RenderStates& get_render_states() const { return *render_states; }
 
 	void set_aspect_ratio(float value)
 	{
@@ -129,10 +129,10 @@ private:
 	void mark_dirty() { dirty = true; }
 
 	void update_zoom();
-	void update_grid();
-	void update_render_states();
+//	void update_grid();
+//	void update_render_states();
 
-	void draw_grid() const;
+//	void draw_grid() const;
 	void draw_layer(const Layer& layer) const;
 
 	Controller* controller{};
@@ -148,9 +148,9 @@ private:
 	float zoom_scale{};
 	float zoom_percent{};
 
-	std::vector<sf::Vertex> vertices;
+//	std::vector<sf::Vertex> vertices;
 	std::unique_ptr<DrawContext> draw_context;
-	std::unique_ptr<sf::RenderStates> render_states;
+//	std::unique_ptr<sf::RenderStates> render_states;
 
 	static constexpr int32_t ZoomIncrement = 8;
 	static constexpr float ZoomLevelShift = 0.7f;
@@ -164,7 +164,7 @@ public:
 
 	void initialize() override;
 	void update() override;
-	void input_event(const sf::Event& event) override;
+//	void input_event(const sf::Event& event) override;
 
 	bool try_get_mouse_position(Int2& position) const
 	{
@@ -182,7 +182,7 @@ private:
 	class ClipboardTool;
 
 	void update_interface();
-	void update_panning();
+//	void update_panning();
 
 	Controller* controller{};
 	LayerView* layer_view{};
@@ -203,12 +203,12 @@ public:
 
 	virtual ~Tool() = default;
 
-	void update_mouse();
+//	void update_mouse();
 	void deactivate() { drag_type = DragType::None; }
 
 	virtual void update_interface() = 0;
-	virtual bool request_activation(const sf::Event& event) = 0;
-	virtual void input_event(const sf::Event& event) {};
+//	virtual bool request_activation(const sf::Event& event) = 0;
+//	virtual void input_event(const sf::Event& event) {};
 
 protected:
 	enum class DragType : uint8_t
@@ -226,9 +226,9 @@ protected:
 	virtual void update(Int2 position) = 0;
 	virtual void commit(Layer& layer) = 0;
 
-	void draw_rectangle(Float2 center, Float2 extend, uint32_t color);
-	void draw_selection(Bounds bounds, uint32_t color);
-	void draw_removal(Bounds bounds);
+//	void draw_rectangle(Float2 center, Float2 extend, uint32_t color);
+//	void draw_selection(Bounds bounds, uint32_t color);
+//	void draw_removal(Bounds bounds);
 
 	DragType drag_type = DragType::None;
 	Int2 drag_origin;
@@ -244,7 +244,7 @@ public:
 	explicit MouseTool(Cursor& cursor) : Tool(cursor), cursor(cursor) {}
 
 	void update_interface() override {}
-	bool request_activation(const sf::Event& event) override;
+//	bool request_activation(const sf::Event& event) override;
 
 protected:
 	void update(Int2 position) override;
@@ -260,7 +260,7 @@ public:
 	explicit WireTool(const Cursor& cursor) : Tool(cursor) {}
 
 	void update_interface() override;
-	bool request_activation(const sf::Event& event) override;
+//	bool request_activation(const sf::Event& event) override;
 
 protected:
 	void update(Int2 position) override;
@@ -276,8 +276,8 @@ public:
 	explicit DeviceTool(const Cursor& cursor) : Tool(cursor) {}
 
 	void update_interface() override;
-	bool request_activation(const sf::Event& event) override;
-	void input_event(const sf::Event& event) override;
+//	bool request_activation(const sf::Event& event) override;
+//	void input_event(const sf::Event& event) override;
 
 protected:
 	void update(Int2 position) override;
@@ -301,7 +301,7 @@ public:
 	explicit RemovalTool(const Cursor& cursor) : Tool(cursor) {}
 
 	void update_interface() override {}
-	bool request_activation(const sf::Event& event) override;
+//	bool request_activation(const sf::Event& event) override;
 
 protected:
 	[[nodiscard]] bool restrict_drag_axis() const override { return false; }
@@ -316,8 +316,8 @@ public:
 	explicit ClipboardTool(const Cursor& cursor);
 
 	void update_interface() override;
-	bool request_activation(const sf::Event& event) override;
-	void input_event(const sf::Event& event) override;
+//	bool request_activation(const sf::Event& event) override;
+//	void input_event(const sf::Event& event) override;
 
 protected:
 	[[nodiscard]] Int2 get_placement_size() const override;
@@ -381,7 +381,7 @@ public:
 
 	void initialize() override;
 	void update() override;
-	void input_event(const sf::Event& event) override;
+//	void input_event(const sf::Event& event) override;
 
 	void pause()
 	{

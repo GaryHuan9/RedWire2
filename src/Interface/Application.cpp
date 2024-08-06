@@ -2,12 +2,20 @@
 #include "Interface/Components.hpp"
 #include "Functional/Board.hpp"
 
-#include "SFML/System.hpp"
-#include "SFML/Window.hpp"
-#include "SFML/Graphics.hpp"
-#include "imgui-SFML.h"
+//#include "SFML/System.hpp"
+//#include "SFML/Window.hpp"
+//#include "SFML/Graphics.hpp"
+//#include "imgui-SFML.h"
+
 #include "imgui.h"
+#include "imgui_impl_glfw.h"
+#include "imgui_impl_opengl3.h"
+
 #include "GL/glew.h"
+#include "GLFW/glfw3.h"
+
+#include <thread>
+#include <chrono>
 
 namespace rw
 {
@@ -15,22 +23,25 @@ namespace rw
 static void configure_spacing(ImGuiStyle& style);
 static void configure_colors(ImGuiStyle& style);
 
-Application::Application()
+static void glfw_error_callback(int code, const char* description)
 {
-	//Create SFML window context
-	sf::VideoMode video_mode(1920, 1080);
-	sf::ContextSettings settings;
-	settings.antialiasingLevel = 16;
-	settings.majorVersion = 4;
-	settings.attributeFlags = sf::ContextSettings::Core;
+	std::string error(description);
+	error += '(' + std::to_string(code) + ')';
+	throw std::runtime_error(error);
+}
 
-	window = std::make_unique<sf::RenderWindow>(video_mode, "RedWire2", sf::Style::Default, settings);
-	window->setVerticalSyncEnabled(true);
-	window->resetGLStates();
+Application::Application() : timer(std::make_unique<Timer>())
+{
+	glfwSetErrorCallback(glfw_error_callback);
 
-	if (not ImGui::SFML::Init(*window, false)) throw std::runtime_error("Unable to create SFML window.");
+	if (not glfwInit()) throw std::runtime_error("Unable to initialize GLFW.");
 
-	timer = std::make_unique<Timer>();
+	window = std::make_unique<RenderWindow>(Int2(1920, 1080), "RedWire2");
+
+	if (glewInit() != GLEW_OK) throw std::runtime_error("Unable initialize GLEW for OpenGL.");
+
+	IMGUI_CHECKVERSION();
+	ImGui::CreateContext();
 
 	//Initialize ImGui
 	auto& io = ImGui::GetIO();
@@ -38,9 +49,10 @@ Application::Application()
 	io.ConfigWindowsMoveFromTitleBarOnly = true;
 	io.IniFilename = "rsc/imgui.ini";
 
+	window->initialize();
+
 	io.Fonts->AddFontFromFileTTF("rsc/JetBrainsMono/JetBrainsMono-Bold.ttf", 16.0f);
-	if (not ImGui::SFML::UpdateFontTexture()) throw std::runtime_error("Unable update font texture.");
-	if (glewInit() != GLEW_OK) throw std::runtime_error("Unable initialize GLEW for OpenGL.");
+	if (not ImGui_ImplOpenGL3_CreateFontsTexture()) throw std::runtime_error("Unable update font texture.");
 
 	//Apply ImGui style
 	auto& style = ImGui::GetStyle();
@@ -63,92 +75,173 @@ Application::Application()
 
 Application::~Application()
 {
-	ImGui::SFML::Shutdown();
+	ImGui_ImplOpenGL3_Shutdown();
+	ImGui_ImplGlfw_Shutdown();
+	ImGui::DestroyContext();
 }
 
 void Application::run()
 {
-	sf::Clock clock;
+	using namespace std::chrono;
 
 	for (auto& component : components) component->initialize();
+	auto last_time = high_resolution_clock::now();
 
-	while (true)
+	while (window->next_iteration())
 	{
-		sf::Event event{};
-		bool closed = false;
-		while (window->pollEvent(event)) process_event(event, closed);
-		if (closed) break;
+		//Process events
+//		sf::Event event{};
+//		bool closed = false;
+//		while (window->pollEvent(event)) process_event(event, closed);
+//		if (closed) break;
 
-		sf::Time time = clock.restart();
-		timer->update(time.asMicroseconds());
-		ImGui::SFML::Update(*window, time);
-		window->clear(sf::Color::Black);
+		// Start the Dear ImGui frame
+		ImGui_ImplOpenGL3_NewFrame();
+		ImGui_ImplGlfw_NewFrame();
+		ImGui::NewFrame();
+
+		auto current_time = high_resolution_clock::now();
+		auto delta_time = current_time - last_time;
+		last_time = current_time;
+
+		timer->update(duration_cast<microseconds>(delta_time).count());
 
 		ImGui::DockSpaceOverViewport(nullptr, ImGuiDockNodeFlags_PassthruCentralNode);
+//		ImGui::ShowDemoWindow();
 
 		for (auto& component : components) component->update();
 
-		//		ImGui::ShowDemoWindow();
-		ImGui::SFML::Render(*window);
-		window->display();
+		ImGui::Render();
+		window->draw();
 	}
 }
 
 bool Application::handle_mouse() const
 {
-	return not ImGui::GetIO().WantCaptureMouse && window->hasFocus();
+	return not ImGui::GetIO().WantCaptureMouse && window->is_focused();
 }
 
 bool Application::handle_keyboard() const
 {
-	return not ImGui::GetIO().WantCaptureKeyboard && window->hasFocus();
+	return not ImGui::GetIO().WantCaptureKeyboard && window->is_focused();
 }
 
-void Application::process_event(const sf::Event& event, bool& closed)
+//void Application::process_event(const sf::Event& event, bool& closed)
+//{
+//	ImGui::SFML::ProcessEvent(*window, event);
+//
+//	auto distribute = [this](const sf::Event& event)
+//	{
+//		for (auto& component : components) component->input_event(event);
+//	};
+//
+//	switch (event.type)
+//	{
+//		case sf::Event::Closed:
+//		{
+//			closed = true;
+//			break;
+//		}
+//		case sf::Event::Resized:
+//		{
+//			sf::Vector2i size(sf::Vector2u(event.size.width, event.size.height));
+//			window->setView(sf::View(sf::Vector2f(size / 2), sf::Vector2f(size)));
+//			glViewport(0, 0, size.x, size.y);
+//			distribute(event);
+//			break;
+//		}
+//		case sf::Event::MouseMoved:
+//		case sf::Event::MouseWheelScrolled:
+//		case sf::Event::MouseButtonPressed:
+//		case sf::Event::MouseButtonReleased:
+//		{
+//			if (not handle_mouse()) break;
+//			distribute(event);
+//			break;
+//		}
+//		case sf::Event::KeyPressed:
+//		case sf::Event::KeyReleased:
+//		{
+//			if (not handle_keyboard()) break;
+//			distribute(event);
+//			break;
+//		}
+//		default: break;
+//	}
+//}
+
+Component::Component(Application& application) : application(application) {}
+
+RenderWindow::RenderWindow(Int2 size, const std::string& name)
 {
-	ImGui::SFML::ProcessEvent(*window, event);
+	//Create SFML window context
+//	sf::VideoMode video_mode(1920, 1080);
+//	sf::ContextSettings settings;
+//	settings.antialiasingLevel = 16;
+//	settings.majorVersion = 4;
+//	settings.attributeFlags = sf::ContextSettings::Core;
 
-	auto distribute = [this](const sf::Event& event)
-	{
-		for (auto& component : components) component->input_event(event);
-	};
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
+	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+	glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
 
-	switch (event.type)
-	{
-		case sf::Event::Closed:
-		{
-			closed = true;
-			break;
-		}
-		case sf::Event::Resized:
-		{
-			sf::Vector2i size(sf::Vector2u(event.size.width, event.size.height));
-			window->setView(sf::View(sf::Vector2f(size / 2), sf::Vector2f(size)));
-			glViewport(0, 0, size.x, size.y);
-			distribute(event);
-			break;
-		}
-		case sf::Event::MouseMoved:
-		case sf::Event::MouseWheelScrolled:
-		case sf::Event::MouseButtonPressed:
-		case sf::Event::MouseButtonReleased:
-		{
-			if (not handle_mouse()) break;
-			distribute(event);
-			break;
-		}
-		case sf::Event::KeyPressed:
-		case sf::Event::KeyReleased:
-		{
-			if (not handle_keyboard()) break;
-			distribute(event);
-			break;
-		}
-		default: break;
-	}
+	pointer = glfwCreateWindow(size.x, size.y, name.c_str(), nullptr, nullptr);
+	if (pointer == nullptr) throw std::runtime_error("Unable to create GLFW window.");
+
+	glfwMakeContextCurrent(pointer);
+	glfwSwapInterval(1);
 }
 
-Component::Component(Application& application) : application(application), window(*application.get_window()) {}
+RenderWindow::~RenderWindow()
+{
+	glfwDestroyWindow(pointer);
+	glfwTerminate();
+	pointer = nullptr;
+}
+
+void RenderWindow::initialize() const
+{
+	ImGui_ImplGlfw_InitForOpenGL(pointer, true);
+	ImGui_ImplOpenGL3_Init(); //TODO: may need to add GLSL version!
+}
+
+void RenderWindow::draw() const
+{
+	Int2 viewport;
+	glfwGetFramebufferSize(pointer, &viewport.x, &viewport.y);
+	glViewport(0, 0, viewport.x, viewport.y);
+	glClear(GL_COLOR_BUFFER_BIT);
+
+	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+	glfwSwapBuffers(pointer);
+}
+
+Int2 RenderWindow::get_size() const
+{
+	Int2 size;
+	glfwGetWindowSize(pointer, &size.x, &size.y);
+	return size;
+}
+
+bool RenderWindow::is_focused() const
+{
+	return get_attribute(GLFW_FOCUSED);
+}
+
+bool RenderWindow::next_iteration() const
+{
+	glfwPollEvents();
+
+	if (glfwWindowShouldClose(pointer)) return false;
+	if (get_attribute(GLFW_ICONIFIED)) std::this_thread::sleep_for(std::chrono::milliseconds(10));
+
+	return true;
+}
+
+bool RenderWindow::get_attribute(int attribute) const
+{
+	return glfwGetWindowAttrib(pointer, attribute) == GLFW_TRUE;
+}
 
 static void configure_spacing(ImGuiStyle& style)
 {

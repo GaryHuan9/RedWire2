@@ -1,24 +1,17 @@
-set(SFML_BUILD_AUDIO FALSE)
-set(SFML_BUILD_NETWORK FALSE)
-
-option(BUILD_SHARED_LIBS "Build shared libraries" OFF)
-
-add_subdirectory(SFML)
-
-target_link_libraries(RedWire2.Core
-        sfml-system
-        sfml-window
-        sfml-graphics
-)
-
-set(IMGUI_DIR ../imgui)
-set(IMGUI_SFML_FIND_SFML OFF)
-set(IMGUI_SFML_IMGUI_DEMO ON)
-add_subdirectory(imgui-sfml)
-
-target_link_libraries(RedWire2.Core ImGui-SFML::ImGui-SFML)
-target_include_directories(RedWire2.Core PRIVATE include)
-
 set(ONLY_LIBS ON)
+set(BUILD_SHARED_LIBS ON)
+set(glew-cmake_BUILD_STATIC OFF)
 add_subdirectory(glew)
-target_link_libraries(RedWire2.Core libglew_static)
+target_link_libraries(RedWire2.Core PUBLIC libglew_shared)
+
+set(GLFW_BUILD_EXAMPLES OFF)
+set(GLFW_BUILD_TESTS OFF)
+set(GLFW_BUILD_DOCS OFF)
+set(GLFW_DOCUMENT_INTERNALS OFF)
+set(GLFW_INSTALL OFF)
+
+add_subdirectory(glfw)
+add_subdirectory(imgui)
+
+target_link_libraries(RedWire2.Core PUBLIC glfw)
+target_link_libraries(RedWire2.Core PUBLIC imgui imgui-freetype imgui-stdlib imgui-glfw imgui-opengl3)

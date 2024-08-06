@@ -3,7 +3,7 @@
 #include "Utility/Functions.hpp"
 #include "Utility/SimpleTypes.hpp"
 
-#include "SFML/Graphics.hpp"
+//#include "SFML/Graphics.hpp"
 #include "GL/glew.h"
 
 #include <fstream>
@@ -241,30 +241,30 @@ static std::string load_shader(const std::filesystem::path& path)
 	return shader;
 }
 
-ShaderResources::ShaderResources() : data(std::make_unique<decltype(data)::element_type>())
+ShaderResources::ShaderResources() //: data(std::make_unique<decltype(data)::element_type>())
 {
-	auto compile = [](sf::Shader& shader, const std::string& vertex, const std::string& fragment)
-	{
-		if (shader.loadFromMemory(vertex, fragment)) return;
-		throw std::runtime_error("Failed to compile shaders.");
-	};
+//	auto compile = [](sf::Shader& shader, const std::string& vertex, const std::string& fragment)
+//	{
+//		if (shader.loadFromMemory(vertex, fragment)) return;
+//		throw std::runtime_error("Failed to compile shaders.");
+//	};
 
 	std::string vertex_quad = load_shader("rsc/Tiles/Quad.vert");
 	std::string vertex_wire = load_shader("rsc/Tiles/Wire.vert");
 	std::string fragment = load_shader("rsc/Tiles/Tile.frag");
 
-	compile(data->at(0), vertex_quad, fragment);
-	compile(data->at(1), vertex_wire, fragment);
+//	compile(data->at(0), vertex_quad, fragment);
+//	compile(data->at(1), vertex_wire, fragment);
 }
 
-sf::Shader* ShaderResources::get_shader(bool quad) const
-{
-	return &data->at(quad ? 0 : 1);
-}
+//sf::Shader* ShaderResources::get_shader(bool quad) const
+//{
+//	return &data->at(quad ? 0 : 1);
+//}
 
 DrawContext::DrawContext(const ShaderResources& shaders) :
-	shader_quad(shaders.get_shader(true)),
-	shader_wire(shaders.get_shader(false)),
+//	shader_quad(shaders.get_shader(true)),
+//	shader_wire(shaders.get_shader(false)),
 	wire_states_buffer(GL_SHADER_STORAGE_BUFFER, GL_STREAM_DRAW)
 {
 	set_rotation(TileRotation());
@@ -363,12 +363,12 @@ void DrawContext::draw(bool quad, const VertexBuffer& buffer) const
 
 	if (quad)
 	{
-		sf::Shader::bind(shader_quad);
+//		sf::Shader::bind(shader_quad);
 		buffer.draw();
 	}
 	else
 	{
-		sf::Shader::bind(shader_wire);
+//		sf::Shader::bind(shader_wire);
 		wire_states_buffer.bind_base(0);
 		buffer.draw();
 		wire_states_buffer.unbind();
@@ -380,7 +380,7 @@ void DrawContext::clear()
 	glBindVertexArray(0);
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 	glDisable(GL_SCISSOR_TEST);
-	sf::Shader::bind(nullptr);
+//	sf::Shader::bind(nullptr);
 	throw_any_gl_error();
 
 	vertices_quad.clear();
@@ -392,15 +392,15 @@ void DrawContext::set_shader_parameters() const
 	if (not shader_dirty) return;
 	shader_dirty = false;
 
-	auto set_parameters = [this](sf::Shader& shader)
-	{
-		shader.setUniform("scale", sf::Glsl::Vec2(scale.x, scale.y));
-		shader.setUniform("origin", sf::Glsl::Vec2(origin.x, origin.y));
-		shader.setUniform("rotation", static_cast<int>(rotation.get_value()));
-	};
+//	auto set_parameters = [this](sf::Shader& shader)
+//	{
+//		shader.setUniform("scale", sf::Glsl::Vec2(scale.x, scale.y));
+//		shader.setUniform("origin", sf::Glsl::Vec2(origin.x, origin.y));
+//		shader.setUniform("rotation", static_cast<int>(rotation.get_value()));
+//	};
 
-	set_parameters(*shader_quad);
-	set_parameters(*shader_wire);
+//	set_parameters(*shader_quad);
+//	set_parameters(*shader_wire);
 }
 
 }

@@ -6,6 +6,8 @@
 #include <algorithm>
 #include <stdexcept>
 
+class GLFWwindow;
+
 namespace rw
 {
 
@@ -17,7 +19,7 @@ public:
 
 	void run();
 
-	[[nodiscard]] sf::RenderWindow* get_window() const { return window.get(); }
+	[[nodiscard]] RenderWindow& get_window() const { return *window; }
 
 	template<class T>
 	[[nodiscard]] T* find_component() const
@@ -48,9 +50,9 @@ public:
 	}
 
 private:
-	void process_event(const sf::Event& event, bool& closed);
+//	void process_event(const sf::Event& event, bool& closed);
 
-	std::unique_ptr<sf::RenderWindow> window;
+	std::unique_ptr<RenderWindow> window{};
 	std::vector<std::unique_ptr<Component>> components;
 	std::unique_ptr<ShaderResources> shader_resources;
 	std::unique_ptr<Timer> timer;
@@ -67,11 +69,10 @@ public:
 
 	virtual void update() = 0;
 
-	virtual void input_event(const sf::Event& event) {}
+//	virtual void input_event(const sf::Event& event) {}
 
 protected:
 	Application& application;
-	sf::RenderWindow& window;
 };
 
 class Timer
@@ -111,6 +112,27 @@ private:
 	uint64_t last_delta_time{};
 	uint64_t update_time{};
 	uint64_t update_count{};
+};
+
+class RenderWindow
+{
+public:
+	RenderWindow(Int2 size, const std::string& name);
+	~RenderWindow();
+
+	void initialize() const;
+	void draw() const;
+
+	[[nodiscard]] Int2 get_size() const;
+	[[nodiscard]] bool is_focused() const;
+
+	[[nodiscard]] bool next_iteration() const;
+
+private:
+
+	[[nodiscard]] bool get_attribute(int attribute) const;
+
+	GLFWwindow* pointer{};
 };
 
 }

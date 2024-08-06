@@ -9,17 +9,17 @@
 #include <memory>
 #include <iostream>
 
-namespace sf
-{
-
-class Event;
-class Vertex;
-class Shader;
-class RenderWindow;
-class RenderStates;
-class RectangleShape;
-
-}
+//namespace sf
+//{
+//
+//class Event;
+//class Vertex;
+//class Shader;
+//class RenderWindow;
+//class RenderStates;
+//class RectangleShape;
+//
+//}
 
 namespace rw
 {
@@ -42,6 +42,7 @@ class Gate;
 class Application;
 class Component;
 class Timer;
+class RenderWindow;
 class Controller;
 class TickControl;
 class LayerView;

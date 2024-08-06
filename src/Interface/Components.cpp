@@ -5,8 +5,8 @@
 #include "Functional/Drawing.hpp"
 #include "Utility/Functions.hpp"
 
-#include "SFML/Window.hpp"
-#include "SFML/Graphics.hpp"
+//#include "SFML/Window.hpp"
+//#include "SFML/Graphics.hpp"
 #include "imgui.h"
 
 #include <filesystem>
@@ -122,10 +122,10 @@ void Controller::update_interface()
 }
 
 LayerView::LayerView(Application& application) :
-	Component(application), render_states(std::make_unique<sf::RenderStates>()),
+	Component(application), /*render_states(std::make_unique<sf::RenderStates>()),*/
 	draw_context(std::make_unique<DrawContext>(application.get_shaders()))
 {
-	Float2 window_size(window.getSize());
+	Float2 window_size(application.get_window().get_size());
 	set_aspect_ratio(window_size.x / window_size.y);
 }
 
@@ -144,27 +144,27 @@ void LayerView::update()
 
 	if (dirty)
 	{
-		update_render_states();
-		update_grid();
+//		update_render_states();
+//		update_grid();
 		dirty = false;
 	}
 
-	draw_grid();
+//	draw_grid();
 	draw_layer(*layer);
 }
 
-void LayerView::input_event(const sf::Event& event)
-{
-	Component::input_event(event);
-	if (event.type != sf::Event::Resized) return;
-
-	Float2 window_size(window.getSize());
-	set_aspect_ratio(window_size.x / window_size.y);
-}
+//void LayerView::input_event(const sf::Event& event)
+//{
+//	Component::input_event(event);
+//	if (event.type != sf::Event::Resized) return;
+//
+//	Float2 window_size(window.getSize());
+//	set_aspect_ratio(window_size.x / window_size.y);
+//}
 
 void LayerView::get_scale_origin(Float2& scale, Float2& origin) const
 {
-	Float2 window_extend = Float2(window.getSize()) / 2.0f;
+	Float2 window_extend = Float2(application.get_window().get_size()) / 2.0f;
 	float scale_x = window_extend.x / extend.x;
 
 	scale = Float2(scale_x, -scale_x);
@@ -184,69 +184,69 @@ void LayerView::update_zoom()
 	extend = Float2(zoom_scale * aspect_ratio, zoom_scale);
 }
 
-void LayerView::update_grid()
-{
-	Float2 scale;
-	Float2 origin;
-	get_scale_origin(scale, origin);
+//void LayerView::update_grid()
+//{
+//	Float2 scale;
+//	Float2 origin;
+//	get_scale_origin(scale, origin);
+//
+//	auto window_size = Float2(window.getSize());
+//	Float2 min = get_min();
+//	Float2 max = get_max();
+//
+//	vertices.clear();
+//
+//	auto drawer = [&](int32_t gap, float percent)
+//	{
+//		Int2 int_min = Float2::ceil(min / static_cast<float>(gap)) * gap;
+//		Int2 int_max = Float2::floor(max / static_cast<float>(gap)) * gap;
+//
+//		auto alpha = static_cast<uint8_t>(GridLineAlpha * percent);
+//		if (alpha == 0) return;
+//
+//		sf::Color color(255, 255, 255, alpha);
+//
+//		for (int32_t int_x = int_min.x; int_x <= int_max.x; int_x += gap)
+//		{
+//			float x = std::fma(static_cast<float>(int_x), scale.x, origin.x);
+//
+//			vertices.emplace_back(sf::Vector2f(x, 0.0f), color);
+//			vertices.emplace_back(sf::Vector2f(x, window_size.y), color);
+//		}
+//
+//		for (int32_t int_y = int_min.y; int_y <= int_max.y; int_y += gap)
+//		{
+//			float y = std::fma(static_cast<float>(int_y), scale.y, origin.y);
+//
+//			vertices.emplace_back(sf::Vector2f(0.0f, y), color);
+//			vertices.emplace_back(sf::Vector2f(window_size.x, y), color);
+//		}
+//	};
+//
+//	if (zoom_level >= 0)
+//	{
+//		drawer(zoom_gap * ZoomIncrement, zoom_percent);
+//		drawer(zoom_gap, 1.0f - zoom_percent);
+//	}
+//	else drawer(zoom_gap, 1.0f);
+//}
 
-	auto window_size = Float2(window.getSize());
-	Float2 min = get_min();
-	Float2 max = get_max();
+//void LayerView::update_render_states()
+//{
+//	Float2 scale;
+//	Float2 origin;
+//	get_scale_origin(scale, origin);
+//
+//	sf::Transform transform;
+//	transform.translate(origin.x, origin.y);
+//	transform.scale(scale.x, scale.y);
+//	render_states->transform = transform;
+//}
 
-	vertices.clear();
-
-	auto drawer = [&](int32_t gap, float percent)
-	{
-		Int2 int_min = Float2::ceil(min / static_cast<float>(gap)) * gap;
-		Int2 int_max = Float2::floor(max / static_cast<float>(gap)) * gap;
-
-		auto alpha = static_cast<uint8_t>(GridLineAlpha * percent);
-		if (alpha == 0) return;
-
-		sf::Color color(255, 255, 255, alpha);
-
-		for (int32_t int_x = int_min.x; int_x <= int_max.x; int_x += gap)
-		{
-			float x = std::fma(static_cast<float>(int_x), scale.x, origin.x);
-
-			vertices.emplace_back(sf::Vector2f(x, 0.0f), color);
-			vertices.emplace_back(sf::Vector2f(x, window_size.y), color);
-		}
-
-		for (int32_t int_y = int_min.y; int_y <= int_max.y; int_y += gap)
-		{
-			float y = std::fma(static_cast<float>(int_y), scale.y, origin.y);
-
-			vertices.emplace_back(sf::Vector2f(0.0f, y), color);
-			vertices.emplace_back(sf::Vector2f(window_size.x, y), color);
-		}
-	};
-
-	if (zoom_level >= 0)
-	{
-		drawer(zoom_gap * ZoomIncrement, zoom_percent);
-		drawer(zoom_gap, 1.0f - zoom_percent);
-	}
-	else drawer(zoom_gap, 1.0f);
-}
-
-void LayerView::update_render_states()
-{
-	Float2 scale;
-	Float2 origin;
-	get_scale_origin(scale, origin);
-
-	sf::Transform transform;
-	transform.translate(origin.x, origin.y);
-	transform.scale(scale.x, scale.y);
-	render_states->transform = transform;
-}
-
-void LayerView::draw_grid() const
-{
-	window.draw(vertices.data(), vertices.size(), sf::PrimitiveType::Lines);
-}
+//void LayerView::draw_grid() const
+//{
+//	window.draw(vertices.data(), vertices.size(), sf::PrimitiveType::Lines);
+//}
 
 void LayerView::draw_layer(const Layer& layer) const
 {
@@ -278,12 +278,12 @@ void Cursor::initialize()
 
 void Cursor::update()
 {
-	Float2 mouse(sf::Mouse::getPosition(window));
-	mouse_percent = mouse / Float2(window.getSize());
-	mouse_percent.y = 1.0f - mouse_percent.y;
-
-	last_mouse_point = mouse_point;
-	mouse_point = layer_view->get_point(mouse_percent);
+//	Float2 mouse(sf::Mouse::getPosition(window));
+//	mouse_percent = mouse / Float2(window.getSize());
+//	mouse_percent.y = 1.0f - mouse_percent.y;
+//
+//	last_mouse_point = mouse_point;
+//	mouse_point = layer_view->get_point(mouse_percent);
 
 	if (controller->get_layer() == nullptr)
 	{
@@ -301,38 +301,38 @@ void Cursor::update()
 		ImGui::End();
 	}
 
-	if (application.handle_keyboard()) update_panning();
-	if (application.handle_mouse()) tool.update_mouse();
+//	if (application.handle_keyboard()) update_panning();
+//	if (application.handle_mouse()) tool.update_mouse();
 	if (old_tool != selected_tool) tool.deactivate();
 }
 
-void Cursor::input_event(const sf::Event& event)
-{
-	Component::input_event(event);
-	if (controller->get_layer() == nullptr) return;
-
-	if (event.type == sf::Event::MouseWheelScrolled)
-	{
-		float delta = event.mouseWheelScroll.delta / -32.0f;
-		layer_view->change_zoom(delta, mouse_percent);
-	}
-
-	Tool& tool = *tools[selected_tool];
-	tool.input_event(event);
-
-	for (uint32_t i = 0; i < tools.size(); ++i)
-	{
-		if (not tools[i]->request_activation(event)) continue;
-
-		if (i != selected_tool)
-		{
-			tool.deactivate();
-			selected_tool = i;
-		}
-
-		break;
-	}
-}
+//void Cursor::input_event(const sf::Event& event)
+//{
+//	Component::input_event(event);
+//	if (controller->get_layer() == nullptr) return;
+//
+//	if (event.type == sf::Event::MouseWheelScrolled)
+//	{
+//		float delta = event.mouseWheelScroll.delta / -32.0f;
+//		layer_view->change_zoom(delta, mouse_percent);
+//	}
+//
+//	Tool& tool = *tools[selected_tool];
+//	tool.input_event(event);
+//
+//	for (uint32_t i = 0; i < tools.size(); ++i)
+//	{
+//		if (not tools[i]->request_activation(event)) continue;
+//
+//		if (i != selected_tool)
+//		{
+//			tool.deactivate();
+//			selected_tool = i;
+//		}
+//
+//		break;
+//	}
+//}
 
 void Cursor::update_interface()
 {
@@ -360,122 +360,122 @@ void Cursor::update_interface()
 	}
 }
 
-void Cursor::update_panning()
-{
-	Int2 view_input;
-	if (sf::Keyboard::isKeyPressed(sf::Keyboard::W)) view_input += Int2(0, 1);
-	if (sf::Keyboard::isKeyPressed(sf::Keyboard::S)) view_input += Int2(0, -1);
-	if (sf::Keyboard::isKeyPressed(sf::Keyboard::A)) view_input += Int2(-1, 0);
-	if (sf::Keyboard::isKeyPressed(sf::Keyboard::D)) view_input += Int2(1, 0);
+//void Cursor::update_panning()
+//{
+//	Int2 view_input;
+//	if (sf::Keyboard::isKeyPressed(sf::Keyboard::W)) view_input += Int2(0, 1);
+//	if (sf::Keyboard::isKeyPressed(sf::Keyboard::S)) view_input += Int2(0, -1);
+//	if (sf::Keyboard::isKeyPressed(sf::Keyboard::A)) view_input += Int2(-1, 0);
+//	if (sf::Keyboard::isKeyPressed(sf::Keyboard::D)) view_input += Int2(1, 0);
+//
+//	if (view_input == Int2(0)) return;
+//	float delta_time = Timer::as_float(application.get_timer().frame_time());
+//	float speed = delta_time * selected_pan_sensitivity;
+//	Float2 delta = view_input.normalized() * speed;
+//
+//	//Move based on relative screen percentage
+//	Float2 reference = layer_view->get_point(Float2(0.0f));
+//	delta.y *= layer_view->get_aspect_ratio();
+//	layer_view->set_point(-delta, reference);
+//	mouse_point = layer_view->get_point(mouse_percent);
+//}
 
-	if (view_input == Int2(0)) return;
-	float delta_time = Timer::as_float(application.get_timer().frame_time());
-	float speed = delta_time * selected_pan_sensitivity;
-	Float2 delta = view_input.normalized() * speed;
+//void Cursor::Tool::update_mouse()
+//{
+//	Int2 size = get_placement_size();
+//	Float2 offset = Float2(size - Int2(1)) / 2.0f;
+//	Int2 position = Float2::floor(cursor.mouse_point - offset);
+//
+//	if (sf::Mouse::isButtonPressed(sf::Mouse::Left))
+//	{
+//		if (drag_type == DragType::None) drag_origin = position;
+//
+//		if (restrict_drag_axis())
+//		{
+//			Int2 delta = (position - drag_origin) / size;
+//			position = delta * size + drag_origin;
+//
+//			if (std::abs(delta.x) >= std::abs(delta.y))
+//			{
+//				drag_type = DragType::Horizontal;
+//				drag_position = Int2(position.x, drag_origin.y);
+//			}
+//			else
+//			{
+//				drag_type = DragType::Vertical;
+//				drag_position = Int2(drag_origin.x, position.y);
+//			}
+//
+//			position = drag_position;
+//		}
+//		else
+//		{
+//			drag_type = DragType::Free;
+//			drag_position = position;
+//		}
+//	}
+//	else
+//	{
+//		if (mouse_pressed())
+//		{
+//			Layer* layer = cursor.controller->get_layer();
+//			assert(layer != nullptr);
+//			commit(*layer);
+//		}
+//
+//		drag_type = DragType::None;
+//	}
+//
+//	update(position);
+//}
 
-	//Move based on relative screen percentage
-	Float2 reference = layer_view->get_point(Float2(0.0f));
-	delta.y *= layer_view->get_aspect_ratio();
-	layer_view->set_point(-delta, reference);
-	mouse_point = layer_view->get_point(mouse_percent);
-}
+//void Cursor::Tool::draw_rectangle(Float2 center, Float2 extend, uint32_t color)
+//{
+//	Float2 min = center - extend;
+//	Float2 max = center + extend;
+//	std::array<sf::Vertex, 4> vertices = { sf::Vertex(sf::Vector2f(min.x, min.y), sf::Color(color)),
+//	                                       sf::Vertex(sf::Vector2f(max.x, min.y), sf::Color(color)),
+//	                                       sf::Vertex(sf::Vector2f(max.x, max.y), sf::Color(color)),
+//	                                       sf::Vertex(sf::Vector2f(min.x, max.y), sf::Color(color)) };
+//
+//	auto render_states = cursor.layer_view->get_render_states();
+//	cursor.window.draw(vertices.data(), vertices.size(), sf::PrimitiveType::Quads, render_states);
+//}
 
-void Cursor::Tool::update_mouse()
-{
-	Int2 size = get_placement_size();
-	Float2 offset = Float2(size - Int2(1)) / 2.0f;
-	Int2 position = Float2::floor(cursor.mouse_point - offset);
+//static std::array<sf::Vertex, 5> get_vertices_border(Bounds bounds, bool highlight)
+//{
+//	sf::Color color(make_color(230, 225, 240, highlight ? 255 : 200));
+//	Float2 min(bounds.get_min());
+//	Float2 max(bounds.get_max());
+//
+//	return { sf::Vertex(sf::Vector2f(min.x, min.y), color), sf::Vertex(sf::Vector2f(max.x, min.y), color),
+//	         sf::Vertex(sf::Vector2f(max.x, max.y), color), sf::Vertex(sf::Vector2f(min.x, max.y), color),
+//	         sf::Vertex(sf::Vector2f(min.x, min.y), color) };
+//}
 
-	if (sf::Mouse::isButtonPressed(sf::Mouse::Left))
-	{
-		if (drag_type == DragType::None) drag_origin = position;
+//void Cursor::Tool::draw_selection(Bounds bounds, uint32_t color)
+//{
+//	draw_rectangle(bounds.center(), bounds.extend(), color);
+//
+//	auto vertices = get_vertices_border(bounds, mouse_pressed());
+//	auto render_states = cursor.layer_view->get_render_states();
+//	cursor.window.draw(vertices.data(), 5, sf::PrimitiveType::LineStrip, render_states);
+//}
 
-		if (restrict_drag_axis())
-		{
-			Int2 delta = (position - drag_origin) / size;
-			position = delta * size + drag_origin;
+//void Cursor::Tool::draw_removal(Bounds bounds)
+//{
+//	draw_selection(bounds, make_color(220, 10, 30, 50));
+//
+//	auto vertices = get_vertices_border(bounds, mouse_pressed());
+//	auto render_states = cursor.layer_view->get_render_states();
+//	std::swap(vertices[1], vertices[2]);
+//	cursor.window.draw(vertices.data(), 4, sf::PrimitiveType::Lines, render_states);
+//}
 
-			if (std::abs(delta.x) >= std::abs(delta.y))
-			{
-				drag_type = DragType::Horizontal;
-				drag_position = Int2(position.x, drag_origin.y);
-			}
-			else
-			{
-				drag_type = DragType::Vertical;
-				drag_position = Int2(drag_origin.x, position.y);
-			}
-
-			position = drag_position;
-		}
-		else
-		{
-			drag_type = DragType::Free;
-			drag_position = position;
-		}
-	}
-	else
-	{
-		if (mouse_pressed())
-		{
-			Layer* layer = cursor.controller->get_layer();
-			assert(layer != nullptr);
-			commit(*layer);
-		}
-
-		drag_type = DragType::None;
-	}
-
-	update(position);
-}
-
-void Cursor::Tool::draw_rectangle(Float2 center, Float2 extend, uint32_t color)
-{
-	Float2 min = center - extend;
-	Float2 max = center + extend;
-	std::array<sf::Vertex, 4> vertices = { sf::Vertex(sf::Vector2f(min.x, min.y), sf::Color(color)),
-	                                       sf::Vertex(sf::Vector2f(max.x, min.y), sf::Color(color)),
-	                                       sf::Vertex(sf::Vector2f(max.x, max.y), sf::Color(color)),
-	                                       sf::Vertex(sf::Vector2f(min.x, max.y), sf::Color(color)) };
-
-	auto render_states = cursor.layer_view->get_render_states();
-	cursor.window.draw(vertices.data(), vertices.size(), sf::PrimitiveType::Quads, render_states);
-}
-
-static std::array<sf::Vertex, 5> get_vertices_border(Bounds bounds, bool highlight)
-{
-	sf::Color color(make_color(230, 225, 240, highlight ? 255 : 200));
-	Float2 min(bounds.get_min());
-	Float2 max(bounds.get_max());
-
-	return { sf::Vertex(sf::Vector2f(min.x, min.y), color), sf::Vertex(sf::Vector2f(max.x, min.y), color),
-	         sf::Vertex(sf::Vector2f(max.x, max.y), color), sf::Vertex(sf::Vector2f(min.x, max.y), color),
-	         sf::Vertex(sf::Vector2f(min.x, min.y), color) };
-}
-
-void Cursor::Tool::draw_selection(Bounds bounds, uint32_t color)
-{
-	draw_rectangle(bounds.center(), bounds.extend(), color);
-
-	auto vertices = get_vertices_border(bounds, mouse_pressed());
-	auto render_states = cursor.layer_view->get_render_states();
-	cursor.window.draw(vertices.data(), 5, sf::PrimitiveType::LineStrip, render_states);
-}
-
-void Cursor::Tool::draw_removal(Bounds bounds)
-{
-	draw_selection(bounds, make_color(220, 10, 30, 50));
-
-	auto vertices = get_vertices_border(bounds, mouse_pressed());
-	auto render_states = cursor.layer_view->get_render_states();
-	std::swap(vertices[1], vertices[2]);
-	cursor.window.draw(vertices.data(), 4, sf::PrimitiveType::Lines, render_states);
-}
-
-bool Cursor::MouseTool::request_activation(const sf::Event& event)
-{
-	return event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Right;
-}
+//bool Cursor::MouseTool::request_activation(const sf::Event& event)
+//{
+//	return event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Right;
+//}
 
 void Cursor::MouseTool::update(Int2 position)
 {
@@ -493,10 +493,10 @@ void Cursor::MouseTool::update(Int2 position)
 	}
 }
 
-bool Cursor::WireTool::request_activation(const sf::Event& event)
-{
-	return event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::E;
-}
+//bool Cursor::WireTool::request_activation(const sf::Event& event)
+//{
+//	return event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::E;
+//}
 
 void Cursor::WireTool::update_interface()
 {
@@ -508,7 +508,7 @@ void Cursor::WireTool::update(Int2 position)
 {
 	Bounds bounds(position);
 	if (mouse_pressed()) bounds = Bounds::encapsulate(drag_origin, position);
-	draw_selection(bounds, Wire::ColorUnpowered);
+//	draw_selection(bounds, Wire::ColorUnpowered);
 }
 
 void Cursor::WireTool::commit(Layer& layer)
@@ -570,34 +570,34 @@ void Cursor::DeviceTool::update_interface()
 	}
 }
 
-bool Cursor::DeviceTool::request_activation(const sf::Event& event)
-{
-	if (event.type != sf::Event::KeyPressed) return false;
+//bool Cursor::DeviceTool::request_activation(const sf::Event& event)
+//{
+//	if (event.type != sf::Event::KeyPressed) return false;
+//
+//	auto code = event.key.code;
+//	switch (code)
+//	{
+//		case sf::Keyboard::Num1:
+//		case sf::Keyboard::Num2:
+//		case sf::Keyboard::Num3:
+//		{
+//			if (code == sf::Keyboard::Num1) selected_type = Type::Transistor;
+//			if (code == sf::Keyboard::Num2) selected_type = Type::Inverter;
+//			if (code == sf::Keyboard::Num3) selected_type = Type::Bridge;
+//			return true;
+//		}
+//		default: return false;
+//	}
+//}
 
-	auto code = event.key.code;
-	switch (code)
-	{
-		case sf::Keyboard::Num1:
-		case sf::Keyboard::Num2:
-		case sf::Keyboard::Num3:
-		{
-			if (code == sf::Keyboard::Num1) selected_type = Type::Transistor;
-			if (code == sf::Keyboard::Num2) selected_type = Type::Inverter;
-			if (code == sf::Keyboard::Num3) selected_type = Type::Bridge;
-			return true;
-		}
-		default: return false;
-	}
-}
-
-void Cursor::DeviceTool::input_event(const sf::Event& event)
-{
-	Tool::input_event(event);
-	if (mouse_pressed()) return;
-
-	if (event.type != sf::Event::KeyPressed || event.key.code != sf::Keyboard::R) return;
-	selected_rotation = selected_rotation.get_next();
-}
+//void Cursor::DeviceTool::input_event(const sf::Event& event)
+//{
+//	Tool::input_event(event);
+//	if (mouse_pressed()) return;
+//
+//	if (event.type != sf::Event::KeyPressed || event.key.code != sf::Keyboard::R) return;
+//	selected_rotation = selected_rotation.get_next();
+//}
 
 void Cursor::DeviceTool::update(Int2 position)
 {
@@ -609,7 +609,7 @@ void Cursor::DeviceTool::update(Int2 position)
 	else throw std::domain_error("Bad PortType.");
 
 	if (mouse_pressed()) position = drag_origin;
-	draw_selection(Bounds(position), color);
+//	draw_selection(Bounds(position), color);
 
 	if (selected_type != Type::Bridge)
 	{
@@ -618,7 +618,7 @@ void Cursor::DeviceTool::update(Int2 position)
 
 		Float2 origin = Float2(position) + Float2(0.5f);
 		Float2 direction(selected_rotation.get_direction());
-		draw_rectangle(origin + direction * Offset, Float2(Extend), Gate::ColorDisabled);
+//		draw_rectangle(origin + direction * Offset, Float2(Extend), Gate::ColorDisabled);
 	}
 }
 
@@ -655,16 +655,16 @@ void Cursor::DeviceTool::commit(Layer& layer)
 	}
 }
 
-bool Cursor::RemovalTool::request_activation(const sf::Event& event)
-{
-	return event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::Q;
-}
+//bool Cursor::RemovalTool::request_activation(const sf::Event& event)
+//{
+//	return event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::Q;
+//}
 
 void Cursor::RemovalTool::update(Int2 position)
 {
 	Bounds bounds(position);
 	if (mouse_pressed()) bounds = Bounds::encapsulate(drag_origin, position);
-	draw_removal(bounds);
+//	draw_removal(bounds);
 }
 
 void Cursor::RemovalTool::commit(Layer& layer)
@@ -707,34 +707,34 @@ void Cursor::ClipboardTool::update_interface()
 	else ImGui::TextUnformatted("No copied clipboard buffer");
 }
 
-bool Cursor::ClipboardTool::request_activation(const sf::Event& event)
-{
-	if (event.type != sf::Event::KeyPressed) return false;
+//bool Cursor::ClipboardTool::request_activation(const sf::Event& event)
+//{
+//	if (event.type != sf::Event::KeyPressed) return false;
+//
+//	auto code = event.key.code;
+//	switch (code)
+//	{
+//		case sf::Keyboard::X:
+//		case sf::Keyboard::C:
+//		case sf::Keyboard::V:
+//		{
+//			if (code == sf::Keyboard::X) selected_type = Type::Cut;
+//			if (code == sf::Keyboard::C) selected_type = Type::Copy;
+//			if (code == sf::Keyboard::V) selected_type = Type::Paste;
+//			return true;
+//		}
+//		default: return false;
+//	}
+//}
 
-	auto code = event.key.code;
-	switch (code)
-	{
-		case sf::Keyboard::X:
-		case sf::Keyboard::C:
-		case sf::Keyboard::V:
-		{
-			if (code == sf::Keyboard::X) selected_type = Type::Cut;
-			if (code == sf::Keyboard::C) selected_type = Type::Copy;
-			if (code == sf::Keyboard::V) selected_type = Type::Paste;
-			return true;
-		}
-		default: return false;
-	}
-}
-
-void Cursor::ClipboardTool::input_event(const sf::Event& event)
-{
-	Tool::input_event(event);
-	if (mouse_pressed()) return;
-
-	if (event.type != sf::Event::KeyPressed || event.key.code != sf::Keyboard::R) return;
-	buffer->set_rotation(buffer->get_rotation().get_next());
-}
+//void Cursor::ClipboardTool::input_event(const sf::Event& event)
+//{
+//	Tool::input_event(event);
+//	if (mouse_pressed()) return;
+//
+//	if (event.type != sf::Event::KeyPressed || event.key.code != sf::Keyboard::R) return;
+//	buffer->set_rotation(buffer->get_rotation().get_next());
+//}
 
 Int2 Cursor::ClipboardTool::get_placement_size() const
 {
@@ -761,7 +761,7 @@ void Cursor::ClipboardTool::update(Int2 position)
 			Int2 max = drag_origin.max(position);
 			Int2 size = buffer->size();
 
-			draw_selection(Bounds(min, max + size), ColorBackground);
+//			draw_selection(Bounds(min, max + size), ColorBackground);
 
 			(drag_type == DragType::Horizontal ? size.y : size.x) = 0;
 			do buffer->draw(min, *draw_context, layer_view);
@@ -770,7 +770,7 @@ void Cursor::ClipboardTool::update(Int2 position)
 		else
 		{
 			Bounds bounds(position, position + buffer->size());
-			draw_selection(bounds, ColorBackground);
+//			draw_selection(bounds, ColorBackground);
 			buffer->draw(position, *draw_context, layer_view);
 		}
 	}
@@ -779,8 +779,8 @@ void Cursor::ClipboardTool::update(Int2 position)
 		Bounds bounds(position);
 		if (mouse_pressed()) bounds = Bounds::encapsulate(drag_origin, position);
 
-		if (selected_type == Type::Cut) draw_removal(bounds);
-		else draw_selection(bounds, make_color(210, 205, 220, 50));
+//		if (selected_type == Type::Cut) draw_removal(bounds);
+//		else draw_selection(bounds, make_color(210, 205, 220, 50));
 	}
 }
 
@@ -919,31 +919,31 @@ void Debugger::update()
 	static int debug_wire = -1;
 	ImGui::InputInt("Debug Wire", &debug_wire);
 
-	const auto& wires = layer.get_list<Wire>();
-	if (debug_wire >= 0 && wires.contains(Index(debug_wire)))
-	{
-		const Wire& wire = wires[Index(debug_wire)];
-		const auto& states = layer_view->get_render_states();
-		sf::RectangleShape shape(sf::Vector2f(0.5f, 0.5f));
-
-		shape.setFillColor(sf::Color::Green);
-
-		for (Int2 position : wire.positions)
-		{
-			Float2 offset = Float2(position) + Float2(0.5f);
-			shape.setPosition(offset.x, offset.y);
-			window.draw(shape, states);
-		}
-
-		shape.setFillColor(sf::Color::Cyan);
-
-		for (Int2 position : wire.bridges)
-		{
-			Float2 offset(position);
-			shape.setPosition(offset.x, offset.y);
-			window.draw(shape, states);
-		}
-	}
+//	const auto& wires = layer.get_list<Wire>();
+//	if (debug_wire >= 0 && wires.contains(Index(debug_wire)))
+//	{
+//		const Wire& wire = wires[Index(debug_wire)];
+//		const auto& states = layer_view->get_render_states();
+//		sf::RectangleShape shape(sf::Vector2f(0.5f, 0.5f));
+//
+//		shape.setFillColor(sf::Color::Green);
+//
+//		for (Int2 position : wire.positions)
+//		{
+//			Float2 offset = Float2(position) + Float2(0.5f);
+//			shape.setPosition(offset.x, offset.y);
+//			window.draw(shape, states);
+//		}
+//
+//		shape.setFillColor(sf::Color::Cyan);
+//
+//		for (Int2 position : wire.bridges)
+//		{
+//			Float2 offset(position);
+//			shape.setPosition(offset.x, offset.y);
+//			window.draw(shape, states);
+//		}
+//	}
 
 	static int debug_gate = -1;
 	ImGui::InputInt("Debug Gate", &debug_gate);
@@ -987,12 +987,12 @@ void TickControl::update()
 	if (last_display_time >= 1.0f) update_display();
 }
 
-void TickControl::input_event(const sf::Event& event)
-{
-	Component::input_event(event);
-	if (event.type != sf::Event::KeyPressed || event.key.code != sf::Keyboard::Space) return;
-	if (selected_type == Type::Manual && remain_count == 0) begin_manual();
-}
+//void TickControl::input_event(const sf::Event& event)
+//{
+//	Component::input_event(event);
+//	if (event.type != sf::Event::KeyPressed || event.key.code != sf::Keyboard::Space) return;
+//	if (selected_type == Type::Manual && remain_count == 0) begin_manual();
+//}
 
 void TickControl::update_interface()
 {
