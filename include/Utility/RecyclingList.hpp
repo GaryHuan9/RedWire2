@@ -25,12 +25,6 @@ public:
 		return *this;
 	}
 
-	RecyclingList& operator=(RecyclingList&& other) noexcept
-	{
-		swap(*this, other);
-		return *this;
-	}
-
 	[[nodiscard]] size_t size() const { return count; }
 
 	[[nodiscard]] const T& operator[](Index index) const
