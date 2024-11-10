@@ -12,21 +12,21 @@ set_property(TARGET RedWire2.Core PROPERTY CMAKE_INTERPROCEDURAL_OPTIMIZATION TR
 target_include_directories(RedWire2.Core PUBLIC include)
 
 # RedWire2.Resources
-file(GLOB_RECURSE resources rsc/**/*)
+file(GLOB_RECURSE REDWIRE2_RESOURCES rsc/**/*)
 
-add_custom_command(OUTPUT resources POST_BUILD COMMAND
+add_custom_command(OUTPUT REDWIRE2_RESOURCES POST_BUILD COMMAND
         ${CMAKE_COMMAND} -E copy_directory_if_different
         ${CMAKE_SOURCE_DIR}/rsc
         ${CMAKE_BINARY_DIR}/rsc
 )
 
-add_custom_target(RedWire2.Resources DEPENDS resources)
+add_custom_target(RedWire2.Resources DEPENDS REDWIRE2_RESOURCES)
 
 # RedWire2
 add_executable(RedWire2 src/main.cpp)
 target_link_libraries(RedWire2 RedWire2.Core)
 add_dependencies(RedWire2 RedWire2.Resources)
 
-# Tests
+# RedWire2.Tests
 add_executable(RedWire2.Tests "")
 add_subdirectory(tests)
