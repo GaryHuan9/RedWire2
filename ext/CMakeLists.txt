@@ -36,10 +36,7 @@ add_library(imgui_build ${IMGUI_SOURCES})
 target_include_directories(imgui_build INTERFACE ${imgui_SOURCE_DIR})
 
 target_link_libraries(RedWire2.Core PRIVATE imgui_build)
-target_sources(RedWire2.Core PRIVATE
-        ${imgui_SOURCE_DIR}/backends/imgui_impl_glfw.cpp
-        ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp
-)
+target_sources(RedWire2.Core PRIVATE ${imgui_SOURCE_DIR}/backends/imgui_impl_glfw.cpp)
 
 #bgfx
 fetchcontent_declare(

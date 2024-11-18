@@ -1,25 +1,8 @@
 #pragma once
 
-#include <cmath>
 #include <cassert>
 #include <cstdint>
-
-#include <vector>
-#include <string>
 #include <memory>
-#include <iostream>
-
-namespace sf
-{
-
-class Event;
-class Vertex;
-class Shader;
-class RenderWindow;
-class RenderStates;
-class RectangleShape;
-
-}
 
 namespace rw
 {

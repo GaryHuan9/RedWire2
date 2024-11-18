@@ -1,8 +1,8 @@
-#include "Interface/Application.hpp"
+#include "Interface/ApplicationNew.hpp"
 
 int main()
 {
-	rw::Application application;
-	application.run();
+	rw::ApplicationNew application;
+    while (application.alive()) application.update();
 	return 0;
 }

@@ -2,13 +2,16 @@
 
 #include "main.hpp"
 
+#include <cmath>
+#include <iostream>
+#include <vector>
+
 namespace rw
 {
 
 template<class T>
 class Vector2
 {
-private:
 	using V = Vector2;
 	using F = std::conditional_t<sizeof(T) <= sizeof(float), float, double>;
 
