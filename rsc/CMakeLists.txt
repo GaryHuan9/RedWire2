@@ -1,7 +1,3 @@
-#Setup
-file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/null.cpp" "")
-target_sources(RedWire2.Resources PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/null.cpp")
-
 #Assets
 file(GLOB_RECURSE REDWIRE2_ASSETS Assets/**/*)
 

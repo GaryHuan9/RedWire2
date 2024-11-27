@@ -1,5 +1,5 @@
-#include "Interface/RenderWindow.hpp"
-#include "Utility/SimpleTypes.hpp"
+#include "RenderWindow.hpp"
+#include "Utility/BasicTypes.hpp"
 
 #include <algorithm>
 #include <filesystem>
@@ -55,11 +55,11 @@ bgfx::ProgramHandle RenderWindow::get_shader(const std::string& name) const
     throw std::runtime_error("Unknown shader " + name + '.');
 }
 
-bgfx::ViewId RenderWindow::get_view_id(View view) const
+bgfx::ViewId RenderWindow::get_view_id(RenderLayer layer) const
 {
-    auto index = static_cast<uint32_t>(view);
+    auto index = static_cast<uint32_t>(layer);
     if (index < view_ids.size()) return view_ids[index];
-    throw std::runtime_error("Unknown RenderWindow::View with index " + index);
+    throw std::runtime_error("Unknown RenderLayer " + index);
 }
 
 void RenderWindow::update()
@@ -84,16 +84,17 @@ void RenderWindow::render()
 void RenderWindow::initialize()
 {
     view_ids.resize(3);
-    view_ids[static_cast<uint32_t>(View::Background)] = 10;
-    view_ids[static_cast<uint32_t>(View::Components)] = 20;
-    view_ids[static_cast<uint32_t>(View::Interface)] = 100;
+    view_ids[static_cast<uint32_t>(RenderLayer::Background)] = 10;
+    view_ids[static_cast<uint32_t>(RenderLayer::Components)] = 20;
+    view_ids[static_cast<uint32_t>(RenderLayer::Interface)] = 15;
 
     for (bgfx::ViewId view_id : view_ids)
     {
-        bgfx::setViewClear(view_id, BGFX_CLEAR_COLOR | BGFX_CLEAR_DEPTH);
         bgfx::setViewRect(view_id, 0, 0, bgfx::BackbufferRatio::Equal);
         bgfx::setViewMode(view_id, bgfx::ViewMode::Sequential);
     }
+
+    bgfx::setViewClear(get_view_id(RenderLayer::Background), BGFX_CLEAR_COLOR | BGFX_CLEAR_DEPTH);
 }
 
 static GLFWwindow* create_window(Int2 size, const std::string& name)

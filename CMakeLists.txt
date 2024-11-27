@@ -10,9 +10,10 @@ add_subdirectory(ext)
 
 set_property(TARGET RedWire2.Core PROPERTY CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
 target_include_directories(RedWire2.Core PUBLIC include)
+target_include_directories(RedWire2.Core PUBLIC src)
 
 # RedWire2.Resources
-add_library(RedWire2.Resources OBJECT "")
+add_library(RedWire2.Resources INTERFACE)
 add_subdirectory(rsc)
 
 # RedWire2

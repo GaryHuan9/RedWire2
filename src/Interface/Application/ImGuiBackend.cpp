@@ -1,6 +1,6 @@
-#include "Interface/ImGuiBackend.hpp"
-#include "Interface/RenderWindow.hpp"
-#include "Utility/SimpleTypes.hpp"
+#include "ImGuiBackend.hpp"
+#include "Graphics/RenderWindow.hpp"
+#include "Utility/BasicTypes.hpp"
 
 #include <imgui.h>
 #include <backends/imgui_impl_glfw.h>
@@ -68,7 +68,7 @@ void ImGuiBackend::render()
     ImGui::Render();
 
     bgfx::ProgramHandle shader = window.get_shader("ImGui");
-    bgfx::ViewId view_id = window.get_view_id(RenderWindow::View::Interface);
+    bgfx::ViewId view_id = window.get_view_id(RenderLayer::Interface);
 
     for (const ImDrawList* draw_list : ImGui::GetDrawData()->CmdLists)
     {

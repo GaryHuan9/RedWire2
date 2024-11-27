@@ -1,43 +1,30 @@
 #pragma once
 
-#include "main.hpp"
-#include "Utility/SimpleTypes.hpp"
+#include "RenderLayer.hpp"
+#include "Utility/BasicTypes.hpp"
 
 #include <unordered_map>
 #include <vector>
 
-class GLFWwindow;
+#include <bgfx/bgfx.h>
 
-namespace bgfx
-{
-class ProgramHandle;
-typedef uint16_t ViewId;
-}
+class GLFWwindow;
 
 namespace rw
 {
 class RenderWindow
 {
 public:
-    enum class View;
-
     RenderWindow(Int2 size, const std::string& name);
     ~RenderWindow();
 
     GLFWwindow* get_handle() const { return handle; }
 
     bgfx::ProgramHandle get_shader(const std::string& name) const;
-    bgfx::ViewId get_view_id(View view) const;
+    bgfx::ViewId get_view_id(RenderLayer layer) const;
 
     void update();
     void render();
-
-    enum class View
-    {
-        Background = 0,
-        Components = 1,
-        Interface = 2
-    };
 
 private:
     void initialize();
