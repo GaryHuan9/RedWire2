@@ -12,8 +12,8 @@
 #include <GLFW/glfw3.h>
 
 #if defined(__linux__)
-#define REDWIRE2_WAYLAND
-// #define REDWIRE2_X11 //TODO: need to enable if compiling for X11, not sure how to automatically detect yet
+// #define REDWIRE2_WAYLAND
+#define REDWIRE2_X11 //TODO: need to enable if compiling for X11, not sure how to automatically detect yet
 #elif defined(__CYGWIN__) || defined(_WIN64) || defined(_WIN32)
 #define REDWIER2_WIN32
 #elif defined(__APPLE__) && defined(__MACH__)
@@ -143,6 +143,7 @@ static void create_renderer(Int2 size, GLFWwindow* handle)
 
     bgfx::RendererType::Enum renderer;
     bool has_renderer = try_candidate(renderer, bgfx::RendererType::Vulkan) ||
+                        // try_candidate(renderer, bgfx::RendererType::Metal) || //Need to figure out how to compile Metal shaders
                         try_candidate(renderer, bgfx::RendererType::OpenGL) ||
                         try_candidate(renderer, bgfx::RendererType::OpenGLES);
 

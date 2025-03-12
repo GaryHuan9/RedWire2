@@ -1,7 +1,5 @@
 #pragma once
 
-#include "RenderMemory.hpp"
-
 #include <bgfx/bgfx.h>
 
 namespace rw
